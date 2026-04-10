@@ -53,6 +53,7 @@ export type Database = {
       projects: {
         Row: {
           created_at: string
+          description: string
           id: string
           name: string
           updated_at: string
@@ -60,6 +61,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          description?: string
           id?: string
           name: string
           updated_at?: string
@@ -67,6 +69,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          description?: string
           id?: string
           name?: string
           updated_at?: string
@@ -77,27 +80,36 @@ export type Database = {
       room_links: {
         Row: {
           created_at: string
+          height: number
           id: string
           link_id: string
           position_x: number
           position_y: number
           room_id: string
+          status: string
+          width: number
         }
         Insert: {
           created_at?: string
+          height?: number
           id?: string
           link_id: string
           position_x?: number
           position_y?: number
           room_id: string
+          status?: string
+          width?: number
         }
         Update: {
           created_at?: string
+          height?: number
           id?: string
           link_id?: string
           position_x?: number
           position_y?: number
           room_id?: string
+          status?: string
+          width?: number
         }
         Relationships: [
           {
@@ -121,6 +133,8 @@ export type Database = {
           created_at: string
           id: string
           name: string
+          position_x: number
+          position_y: number
           project_id: string
           updated_at: string
         }
@@ -128,6 +142,8 @@ export type Database = {
           created_at?: string
           id?: string
           name: string
+          position_x?: number
+          position_y?: number
           project_id: string
           updated_at?: string
         }
@@ -135,6 +151,8 @@ export type Database = {
           created_at?: string
           id?: string
           name?: string
+          position_x?: number
+          position_y?: number
           project_id?: string
           updated_at?: string
         }

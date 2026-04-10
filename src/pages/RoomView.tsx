@@ -2,22 +2,28 @@ import { useEffect, useState, useRef, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useParams, useNavigate } from "react-router-dom";
-import { Plus, Loader2, ArrowLeft, ExternalLink, Pencil, Trash2 } from "lucide-react";
+import { Plus, Loader2, ArrowLeft, ExternalLink, Pencil, Trash2, DollarSign, LayoutGrid } from "lucide-react";
+import RoomBudgetView from "@/components/RoomBudgetView";
 
 interface RoomLink {
-  id: string; // room_links.id
+  id: string;
   link_id: string;
   url: string;
   title: string;
   description: string;
   image: string;
   price: string;
+  status: string;
   position_x: number;
   position_y: number;
+  width: number;
+  height: number;
 }
 
-const CARD_W = 260;
-const CARD_MIN_H = 120;
+const CARD_MIN_W = 160;
+const CARD_MIN_H = 100;
+
+type RoomTab = "board" | "budget";
 
 const RoomView = () => {
   const { user } = useAuth();
@@ -28,9 +34,10 @@ const RoomView = () => {
   const [loading, setLoading] = useState(true);
   const [url, setUrl] = useState("");
   const [fetching, setFetching] = useState(false);
+  const [activeTab, setActiveTab] = useState<RoomTab>("board");
 
-  // Drag state
   const dragRef = useRef<{ id: string; offsetX: number; offsetY: number } | null>(null);
+  const resizeRef = useRef<{ id: string; startX: number; startY: number; startW: number; startH: number } | null>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
 
   const fetchCards = useCallback(async () => {
@@ -40,7 +47,7 @@ const RoomView = () => {
 
     const { data: rlRows } = await supabase
       .from("room_links")
-      .select("id, link_id, position_x, position_y")
+      .select("id, link_id, position_x, position_y, width, height, status")
       .eq("room_id", roomId);
 
     if (!rlRows || rlRows.length === 0) { setCards([]); setLoading(false); return; }
@@ -62,8 +69,11 @@ const RoomView = () => {
           description: l.description || "",
           image: l.image || "",
           price: l.price || "",
+          status: rl.status || "idea",
           position_x: rl.position_x,
           position_y: rl.position_y,
+          width: rl.width || 260,
+          height: rl.height || 200,
         };
       })
     );
@@ -83,7 +93,6 @@ const RoomView = () => {
       });
       if (error) throw error;
 
-      // Insert link
       const { data: newLink } = await supabase
         .from("links")
         .insert({
@@ -97,7 +106,6 @@ const RoomView = () => {
         .single();
 
       if (newLink) {
-        // Place at a random position in visible area
         const px = 40 + Math.random() * 400;
         const py = 40 + Math.random() * 300;
         await supabase.from("room_links").insert({
@@ -124,8 +132,6 @@ const RoomView = () => {
   // Drag handlers
   const onMouseDown = (e: React.MouseEvent, card: RoomLink) => {
     e.preventDefault();
-    const rect = canvasRef.current?.getBoundingClientRect();
-    if (!rect) return;
     dragRef.current = {
       id: card.id,
       offsetX: e.clientX - card.position_x,
@@ -133,27 +139,61 @@ const RoomView = () => {
     };
   };
 
+  // Resize handlers
+  const onResizeStart = (e: React.MouseEvent, card: RoomLink) => {
+    e.preventDefault();
+    e.stopPropagation();
+    resizeRef.current = {
+      id: card.id,
+      startX: e.clientX,
+      startY: e.clientY,
+      startW: card.width,
+      startH: card.height,
+    };
+  };
+
   useEffect(() => {
     const onMouseMove = (e: MouseEvent) => {
-      if (!dragRef.current) return;
-      const { id, offsetX, offsetY } = dragRef.current;
-      const nx = e.clientX - offsetX;
-      const ny = e.clientY - offsetY;
-      setCards((prev) =>
-        prev.map((c) => (c.id === id ? { ...c, position_x: nx, position_y: ny } : c))
-      );
+      if (dragRef.current) {
+        const { id, offsetX, offsetY } = dragRef.current;
+        const nx = e.clientX - offsetX;
+        const ny = e.clientY - offsetY;
+        setCards((prev) =>
+          prev.map((c) => (c.id === id ? { ...c, position_x: nx, position_y: ny } : c))
+        );
+      }
+      if (resizeRef.current) {
+        const { id, startX, startY, startW, startH } = resizeRef.current;
+        const nw = Math.max(CARD_MIN_W, startW + (e.clientX - startX));
+        const nh = Math.max(CARD_MIN_H, startH + (e.clientY - startY));
+        setCards((prev) =>
+          prev.map((c) => (c.id === id ? { ...c, width: nw, height: nh } : c))
+        );
+      }
     };
 
     const onMouseUp = async () => {
-      if (!dragRef.current) return;
-      const { id } = dragRef.current;
-      const card = cards.find((c) => c.id === id);
-      dragRef.current = null;
-      if (card) {
-        await supabase
-          .from("room_links")
-          .update({ position_x: card.position_x, position_y: card.position_y })
-          .eq("id", id);
+      if (dragRef.current) {
+        const { id } = dragRef.current;
+        const card = cards.find((c) => c.id === id);
+        dragRef.current = null;
+        if (card) {
+          await supabase
+            .from("room_links")
+            .update({ position_x: card.position_x, position_y: card.position_y })
+            .eq("id", id);
+        }
+      }
+      if (resizeRef.current) {
+        const { id } = resizeRef.current;
+        const card = cards.find((c) => c.id === id);
+        resizeRef.current = null;
+        if (card) {
+          await supabase
+            .from("room_links")
+            .update({ width: card.width, height: card.height })
+            .eq("id", id);
+        }
       }
     };
 
@@ -182,57 +222,83 @@ const RoomView = () => {
 
   return (
     <div className="h-screen flex flex-col bg-background overflow-hidden">
-      {/* Header */}
       <header className="shrink-0 bg-background/80 backdrop-blur-sm border-b border-border z-10">
         <div className="px-6 py-3 flex items-center gap-3">
           <button onClick={() => navigate(`/projects/${projectId}`)} className="text-muted-foreground hover:text-foreground">
             <ArrowLeft className="w-4 h-4" />
           </button>
           <h1 className="text-sm font-semibold text-foreground">{roomName}</h1>
-          <span className="text-xs text-muted-foreground">{cards.length} link{cards.length !== 1 ? "s" : ""}</span>
-          <form onSubmit={handleAddLink} className="ml-auto flex gap-2">
-            <input
-              type="url"
-              value={url}
-              onChange={(e) => setUrl(e.target.value)}
-              placeholder="Paste a URL…"
-              className="w-64 bg-secondary text-foreground placeholder:text-muted-foreground px-3 py-1.5 rounded-lg text-xs outline-none focus:ring-2 focus:ring-ring/20"
-              required
-            />
+          <span className="text-xs text-muted-foreground">{cards.length} item{cards.length !== 1 ? "s" : ""}</span>
+
+          {/* Tabs */}
+          <div className="ml-4 flex items-center gap-1 bg-secondary rounded-lg p-0.5">
             <button
-              type="submit"
-              disabled={fetching}
-              className="bg-primary text-primary-foreground px-3 py-1.5 rounded-lg text-xs font-medium hover:opacity-90 disabled:opacity-50 flex items-center gap-1"
+              onClick={() => setActiveTab("board")}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                activeTab === "board" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+              }`}
             >
-              {fetching ? <Loader2 className="w-3 h-3 animate-spin" /> : <Plus className="w-3 h-3" />}
-              Add
+              <LayoutGrid className="w-3.5 h-3.5" /> Board
             </button>
-          </form>
+            <button
+              onClick={() => setActiveTab("budget")}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                activeTab === "budget" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <DollarSign className="w-3.5 h-3.5" /> Budget
+            </button>
+          </div>
+
+          {activeTab === "board" && (
+            <form onSubmit={handleAddLink} className="ml-auto flex gap-2">
+              <input
+                type="url"
+                value={url}
+                onChange={(e) => setUrl(e.target.value)}
+                placeholder="Paste a URL…"
+                className="w-64 bg-secondary text-foreground placeholder:text-muted-foreground px-3 py-1.5 rounded-lg text-xs outline-none focus:ring-2 focus:ring-ring/20"
+                required
+              />
+              <button
+                type="submit"
+                disabled={fetching}
+                className="bg-primary text-primary-foreground px-3 py-1.5 rounded-lg text-xs font-medium hover:opacity-90 disabled:opacity-50 flex items-center gap-1"
+              >
+                {fetching ? <Loader2 className="w-3 h-3 animate-spin" /> : <Plus className="w-3 h-3" />}
+                Add
+              </button>
+            </form>
+          )}
         </div>
       </header>
 
-      {/* Canvas */}
-      <div
-        ref={canvasRef}
-        className="flex-1 relative overflow-auto"
-        style={{ backgroundImage: "radial-gradient(circle, hsl(var(--border)) 1px, transparent 1px)", backgroundSize: "24px 24px" }}
-      >
-        {cards.length === 0 && (
-          <p className="absolute inset-0 flex items-center justify-center text-sm text-muted-foreground">
-            Add links above to start your moodboard
-          </p>
-        )}
+      {activeTab === "budget" && roomId ? (
+        <RoomBudgetView roomId={roomId} />
+      ) : (
+        <div
+          ref={canvasRef}
+          className="flex-1 relative overflow-auto"
+          style={{ backgroundImage: "radial-gradient(circle, hsl(var(--border)) 1px, transparent 1px)", backgroundSize: "24px 24px" }}
+        >
+          {cards.length === 0 && (
+            <p className="absolute inset-0 flex items-center justify-center text-sm text-muted-foreground">
+              Add links above to start your moodboard
+            </p>
+          )}
 
-        {cards.map((card) => (
-          <DraggableCard
-            key={card.id}
-            card={card}
-            onMouseDown={(e) => onMouseDown(e, card)}
-            onRemove={() => handleRemove(card.id)}
-            onUpdate={(fields) => handleUpdateField(card.link_id, fields)}
-          />
-        ))}
-      </div>
+          {cards.map((card) => (
+            <DraggableCard
+              key={card.id}
+              card={card}
+              onMouseDown={(e) => onMouseDown(e, card)}
+              onResizeStart={(e) => onResizeStart(e, card)}
+              onRemove={() => handleRemove(card.id)}
+              onUpdate={(fields) => handleUpdateField(card.link_id, fields)}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 };
@@ -241,11 +307,12 @@ const RoomView = () => {
 interface DraggableCardProps {
   card: RoomLink;
   onMouseDown: (e: React.MouseEvent) => void;
+  onResizeStart: (e: React.MouseEvent) => void;
   onRemove: () => void;
   onUpdate: (fields: { title?: string; price?: string }) => void;
 }
 
-const DraggableCard = ({ card, onMouseDown, onRemove, onUpdate }: DraggableCardProps) => {
+const DraggableCard = ({ card, onMouseDown, onResizeStart, onRemove, onUpdate }: DraggableCardProps) => {
   const [editTitle, setEditTitle] = useState(false);
   const [editPrice, setEditPrice] = useState(false);
   const [title, setTitle] = useState(card.title);
@@ -254,11 +321,11 @@ const DraggableCard = ({ card, onMouseDown, onRemove, onUpdate }: DraggableCardP
   return (
     <div
       className="absolute group bg-card rounded-lg overflow-hidden border border-border shadow-sm hover:shadow-md transition-shadow select-none"
-      style={{ left: card.position_x, top: card.position_y, width: CARD_W, minHeight: CARD_MIN_H }}
+      style={{ left: card.position_x, top: card.position_y, width: card.width, minHeight: CARD_MIN_H }}
       onMouseDown={onMouseDown}
     >
       {card.image && (
-        <img src={card.image} alt={card.title} className="w-full object-cover pointer-events-none" loading="lazy" draggable={false} />
+        <img src={card.image} alt={card.title} className="w-full object-cover pointer-events-none" style={{ maxHeight: card.height - 60 }} loading="lazy" draggable={false} />
       )}
       <div className="p-3 space-y-1.5" onMouseDown={(e) => e.stopPropagation()}>
         {editTitle ? (
@@ -318,6 +385,16 @@ const DraggableCard = ({ card, onMouseDown, onRemove, onUpdate }: DraggableCardP
         >
           <Trash2 className="w-3 h-3" />
         </button>
+      </div>
+
+      {/* Resize handle */}
+      <div
+        className="absolute bottom-0 right-0 w-4 h-4 cursor-se-resize opacity-0 group-hover:opacity-100 transition-opacity"
+        onMouseDown={onResizeStart}
+      >
+        <svg width="16" height="16" viewBox="0 0 16 16" className="text-muted-foreground">
+          <path d="M14 14L8 14L14 8Z" fill="currentColor" opacity="0.3" />
+        </svg>
       </div>
     </div>
   );

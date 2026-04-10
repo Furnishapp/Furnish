@@ -8,6 +8,7 @@ import Auth from "./pages/Auth";
 import Projects from "./pages/Projects";
 import ProjectDetail from "./pages/ProjectDetail";
 import RoomView from "./pages/RoomView";
+import PresentationView from "./pages/PresentationView";
 import NotFound from "./pages/NotFound";
 import { Loader2 } from "lucide-react";
 
@@ -38,6 +39,7 @@ const App = () => (
           <Route path="/" element={<ProtectedRoute><Projects /></ProtectedRoute>} />
           <Route path="/projects/:projectId" element={<ProtectedRoute><ProjectDetail /></ProtectedRoute>} />
           <Route path="/projects/:projectId/rooms/:roomId" element={<ProtectedRoute><RoomView /></ProtectedRoute>} />
+          <Route path="/projects/:projectId/present" element={<ProtectedRoute><PresentationView /></ProtectedRoute>} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
