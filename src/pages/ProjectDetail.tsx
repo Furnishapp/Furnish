@@ -2,71 +2,39 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useParams, useNavigate } from "react-router-dom";
-import { Plus, Loader2, ArrowLeft, Trash2, DoorOpen } from "lucide-react";
+import { ArrowLeft, Loader2, Map, DollarSign, Presentation } from "lucide-react";
+import PlanMode from "@/components/PlanMode";
+import BudgetMode from "@/components/BudgetMode";
+import SlidesMode from "@/components/SlidesMode";
 
-interface Room {
-  id: string;
-  name: string;
-  link_count: number;
-}
+type Tab = "plan" | "budget" | "slides";
+
+const tabs: { key: Tab; label: string; icon: typeof Map }[] = [
+  { key: "plan", label: "Plan", icon: Map },
+  { key: "budget", label: "Budget", icon: DollarSign },
+  { key: "slides", label: "Slides", icon: Presentation },
+];
 
 const ProjectDetail = () => {
   const { user } = useAuth();
   const { projectId } = useParams<{ projectId: string }>();
   const navigate = useNavigate();
   const [projectName, setProjectName] = useState("");
-  const [rooms, setRooms] = useState<Room[]>([]);
   const [loading, setLoading] = useState(true);
-  const [name, setName] = useState("");
-  const [creating, setCreating] = useState(false);
+  const [activeTab, setActiveTab] = useState<Tab>("plan");
 
-  const fetchData = async () => {
+  useEffect(() => {
     if (!user || !projectId) return;
-
-    const { data: project } = await supabase
+    supabase
       .from("projects")
       .select("name")
       .eq("id", projectId)
-      .single();
-
-    if (project) setProjectName(project.name);
-
-    const { data: roomRows } = await supabase
-      .from("rooms")
-      .select("id, name")
-      .eq("project_id", projectId)
-      .order("created_at", { ascending: false });
-
-    if (!roomRows) { setLoading(false); return; }
-
-    // Get link counts per room
-    const { data: roomLinks } = await supabase
-      .from("room_links")
-      .select("room_id");
-
-    const counts: Record<string, number> = {};
-    roomLinks?.forEach((rl) => { counts[rl.room_id] = (counts[rl.room_id] || 0) + 1; });
-
-    setRooms(roomRows.map((r) => ({ ...r, link_count: counts[r.id] || 0 })));
-    setLoading(false);
-  };
-
-  useEffect(() => { fetchData(); }, [user, projectId]);
-
-  const handleCreate = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!name.trim() || !projectId) return;
-    setCreating(true);
-    await supabase.from("rooms").insert({ name: name.trim(), project_id: projectId });
-    setName("");
-    setCreating(false);
-    fetchData();
-  };
-
-  const handleDelete = async (id: string) => {
-    await supabase.from("rooms").delete().eq("id", id);
-    fetchData();
-  };
+      .single()
+      .then(({ data }) => {
+        if (data) setProjectName(data.name);
+        setLoading(false);
+      });
+  }, [user, projectId]);
 
   if (loading) {
     return (
@@ -77,63 +45,36 @@ const ProjectDetail = () => {
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="sticky top-0 z-10 bg-background/80 backdrop-blur-sm border-b border-border">
-        <div className="max-w-4xl mx-auto px-6 py-4 flex items-center gap-3">
+    <div className="h-screen flex flex-col bg-background overflow-hidden">
+      <header className="shrink-0 bg-background/80 backdrop-blur-sm border-b border-border z-10">
+        <div className="px-6 py-3 flex items-center gap-4">
           <button onClick={() => navigate("/")} className="text-muted-foreground hover:text-foreground">
             <ArrowLeft className="w-4 h-4" />
           </button>
-          <h1 className="text-base font-semibold text-foreground">{projectName}</h1>
+          <h1 className="text-sm font-semibold text-foreground">{projectName}</h1>
+
+          <div className="ml-auto flex items-center gap-1 bg-secondary rounded-lg p-0.5">
+            {tabs.map(({ key, label, icon: Icon }) => (
+              <button
+                key={key}
+                onClick={() => setActiveTab(key)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                  activeTab === key
+                    ? "bg-card text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <Icon className="w-3.5 h-3.5" />
+                {label}
+              </button>
+            ))}
+          </div>
         </div>
       </header>
 
-      <main className="max-w-4xl mx-auto px-6 py-8 space-y-6">
-        <form onSubmit={handleCreate} className="flex gap-2">
-          <input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="New room name…"
-            className="flex-1 bg-secondary text-foreground placeholder:text-muted-foreground px-4 py-2.5 rounded-lg text-sm outline-none focus:ring-2 focus:ring-ring/20"
-            required
-          />
-          <button
-            type="submit"
-            disabled={creating}
-            className="bg-primary text-primary-foreground px-4 py-2.5 rounded-lg text-sm font-medium hover:opacity-90 transition-opacity disabled:opacity-50 flex items-center gap-2"
-          >
-            {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-            Add Room
-          </button>
-        </form>
-
-        {rooms.length === 0 ? (
-          <p className="text-center text-muted-foreground text-sm pt-20">Add your first room above</p>
-        ) : (
-          <div className="grid gap-3">
-            {rooms.map((r) => (
-              <div
-                key={r.id}
-                className="bg-card border border-border rounded-lg px-5 py-4 flex items-center justify-between hover:shadow-sm transition-shadow cursor-pointer"
-                onClick={() => navigate(`/projects/${projectId}/rooms/${r.id}`)}
-              >
-                <div className="flex items-center gap-3">
-                  <DoorOpen className="w-4 h-4 text-muted-foreground" />
-                  <span className="text-sm font-medium text-card-foreground">{r.name}</span>
-                </div>
-                <div className="flex items-center gap-3">
-                  <span className="text-xs text-muted-foreground">{r.link_count} link{r.link_count !== 1 ? "s" : ""}</span>
-                  <button
-                    onClick={(e) => { e.stopPropagation(); handleDelete(r.id); }}
-                    className="text-muted-foreground hover:text-destructive transition-colors"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </main>
+      {projectId && activeTab === "plan" && <PlanMode projectId={projectId} />}
+      {projectId && activeTab === "budget" && <BudgetMode projectId={projectId} />}
+      {projectId && activeTab === "slides" && <SlidesMode projectId={projectId} />}
     </div>
   );
 };
