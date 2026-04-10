@@ -35,10 +35,7 @@ const PresentationView = () => {
     return () => window.removeEventListener("keydown", handleKey);
   }, [slides, navigate]);
 
-  useEffect(() => {
-    document.documentElement.requestFullscreen?.().catch(() => {});
-    return () => { document.exitFullscreen?.().catch(() => {}); };
-  }, []);
+  // Fullscreen is not reliably available in iframe/sandbox environments, so we skip it.
 
   if (slides.length === 0) {
     return (
