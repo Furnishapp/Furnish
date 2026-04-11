@@ -2,8 +2,9 @@ import { useEffect, useState, useRef, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useParams, useNavigate } from "react-router-dom";
-import { Plus, Loader2, ArrowLeft, ExternalLink, Pencil, Trash2, DollarSign, LayoutGrid } from "lucide-react";
+import { Plus, Loader2, ArrowLeft, ExternalLink, Pencil, Trash2, DollarSign, LayoutGrid, Heart, Eye, EyeOff } from "lucide-react";
 import RoomBudgetView from "@/components/RoomBudgetView";
+import MoodMode from "@/components/MoodMode";
 
 interface RoomLink {
   id: string;
@@ -18,12 +19,13 @@ interface RoomLink {
   position_y: number;
   width: number;
   height: number;
+  show_caption: boolean;
 }
 
 const CARD_MIN_W = 160;
 const CARD_MIN_H = 100;
 
-type RoomTab = "board" | "budget";
+type RoomTab = "mood" | "product" | "budget";
 
 const RoomView = () => {
   const { user } = useAuth();
@@ -34,7 +36,7 @@ const RoomView = () => {
   const [loading, setLoading] = useState(true);
   const [url, setUrl] = useState("");
   const [fetching, setFetching] = useState(false);
-  const [activeTab, setActiveTab] = useState<RoomTab>("board");
+  const [activeTab, setActiveTab] = useState<RoomTab>("product");
 
   const dragRef = useRef<{ id: string; offsetX: number; offsetY: number } | null>(null);
   const resizeRef = useRef<{ id: string; startX: number; startY: number; startW: number; startH: number } | null>(null);
@@ -47,7 +49,7 @@ const RoomView = () => {
 
     const { data: rlRows } = await supabase
       .from("room_links")
-      .select("id, link_id, position_x, position_y, width, height, status")
+      .select("id, link_id, position_x, position_y, width, height, status, show_caption")
       .eq("room_id", roomId);
 
     if (!rlRows || rlRows.length === 0) { setCards([]); setLoading(false); return; }
@@ -74,6 +76,7 @@ const RoomView = () => {
           position_y: rl.position_y,
           width: rl.width || 260,
           height: rl.height || 200,
+          show_caption: rl.show_caption !== false,
         };
       })
     );
@@ -127,6 +130,12 @@ const RoomView = () => {
   const handleRemove = async (rlId: string) => {
     await supabase.from("room_links").delete().eq("id", rlId);
     setCards((prev) => prev.filter((c) => c.id !== rlId));
+  };
+
+  const handleToggleCaption = async (rlId: string, current: boolean) => {
+    const next = !current;
+    await supabase.from("room_links").update({ show_caption: next }).eq("id", rlId);
+    setCards((prev) => prev.map((c) => (c.id === rlId ? { ...c, show_caption: next } : c)));
   };
 
   // Drag handlers
@@ -220,6 +229,12 @@ const RoomView = () => {
     );
   }
 
+  const tabItems: { key: RoomTab; label: string; icon: typeof Heart }[] = [
+    { key: "mood", label: "Mood", icon: Heart },
+    { key: "product", label: "Products", icon: LayoutGrid },
+    { key: "budget", label: "Budget", icon: DollarSign },
+  ];
+
   return (
     <div className="h-screen flex flex-col bg-background overflow-hidden">
       <header className="shrink-0 bg-background/80 backdrop-blur-sm border-b border-border z-10">
@@ -232,25 +247,20 @@ const RoomView = () => {
 
           {/* Tabs */}
           <div className="ml-4 flex items-center gap-1 bg-secondary rounded-lg p-0.5">
-            <button
-              onClick={() => setActiveTab("board")}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-                activeTab === "board" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              <LayoutGrid className="w-3.5 h-3.5" /> Board
-            </button>
-            <button
-              onClick={() => setActiveTab("budget")}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-                activeTab === "budget" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              <DollarSign className="w-3.5 h-3.5" /> Budget
-            </button>
+            {tabItems.map(({ key, label, icon: Icon }) => (
+              <button
+                key={key}
+                onClick={() => setActiveTab(key)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                  activeTab === key ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <Icon className="w-3.5 h-3.5" /> {label}
+              </button>
+            ))}
           </div>
 
-          {activeTab === "board" && (
+          {activeTab === "product" && (
             <form onSubmit={handleAddLink} className="ml-auto flex gap-2">
               <input
                 type="url"
@@ -273,7 +283,9 @@ const RoomView = () => {
         </div>
       </header>
 
-      {activeTab === "budget" && roomId ? (
+      {activeTab === "mood" && roomId ? (
+        <MoodMode roomId={roomId} />
+      ) : activeTab === "budget" && roomId ? (
         <RoomBudgetView roomId={roomId} />
       ) : (
         <div
@@ -294,6 +306,7 @@ const RoomView = () => {
               onMouseDown={(e) => onMouseDown(e, card)}
               onResizeStart={(e) => onResizeStart(e, card)}
               onRemove={() => handleRemove(card.id)}
+              onToggleCaption={() => handleToggleCaption(card.id, card.show_caption)}
               onUpdate={(fields) => handleUpdateField(card.link_id, fields)}
             />
           ))}
@@ -309,10 +322,11 @@ interface DraggableCardProps {
   onMouseDown: (e: React.MouseEvent) => void;
   onResizeStart: (e: React.MouseEvent) => void;
   onRemove: () => void;
+  onToggleCaption: () => void;
   onUpdate: (fields: { title?: string; price?: string }) => void;
 }
 
-const DraggableCard = ({ card, onMouseDown, onResizeStart, onRemove, onUpdate }: DraggableCardProps) => {
+const DraggableCard = ({ card, onMouseDown, onResizeStart, onRemove, onToggleCaption, onUpdate }: DraggableCardProps) => {
   const [editTitle, setEditTitle] = useState(false);
   const [editPrice, setEditPrice] = useState(false);
   const [title, setTitle] = useState(card.title);
@@ -325,63 +339,83 @@ const DraggableCard = ({ card, onMouseDown, onResizeStart, onRemove, onUpdate }:
       onMouseDown={onMouseDown}
     >
       {card.image && (
-        <img src={card.image} alt={card.title} className="w-full object-cover pointer-events-none" style={{ maxHeight: card.height - 60 }} loading="lazy" draggable={false} />
+        <img src={card.image} alt={card.title} className="w-full object-cover pointer-events-none" style={{ maxHeight: card.height - (card.show_caption ? 60 : 0) }} loading="lazy" draggable={false} />
       )}
-      <div className="p-3 space-y-1.5" onMouseDown={(e) => e.stopPropagation()}>
-        {editTitle ? (
-          <input
-            className="w-full bg-secondary px-2 py-1 rounded text-xs font-medium text-card-foreground outline-none"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            onBlur={() => { setEditTitle(false); onUpdate({ title }); }}
-            onKeyDown={(e) => { if (e.key === "Enter") { setEditTitle(false); onUpdate({ title }); } }}
-            autoFocus
-          />
-        ) : (
-          <h3
-            className="text-xs font-medium text-card-foreground cursor-pointer flex items-center gap-1"
-            onClick={() => setEditTitle(true)}
-          >
-            {title || "Untitled"}
-            <Pencil className="w-2.5 h-2.5 text-muted-foreground opacity-0 group-hover:opacity-100" />
-          </h3>
-        )}
 
-        {card.description && (
-          <p className="text-[10px] text-muted-foreground line-clamp-2">{card.description}</p>
-        )}
-
-        <div className="flex items-center justify-between pt-0.5">
-          <a
-            href={card.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-[10px] text-muted-foreground hover:text-foreground flex items-center gap-1 truncate max-w-[60%]"
-          >
-            <ExternalLink className="w-2.5 h-2.5 shrink-0" />
-            {(() => { try { return new URL(card.url).hostname; } catch { return card.url; } })()}
-          </a>
-
-          {editPrice ? (
+      {card.show_caption && (
+        <div className="p-3 space-y-1.5" onMouseDown={(e) => e.stopPropagation()}>
+          {editTitle ? (
             <input
-              className="w-16 bg-secondary px-2 py-0.5 rounded text-[10px] text-right text-card-foreground outline-none"
-              value={price}
-              placeholder="Price"
-              onChange={(e) => setPrice(e.target.value)}
-              onBlur={() => { setEditPrice(false); onUpdate({ price }); }}
-              onKeyDown={(e) => { if (e.key === "Enter") { setEditPrice(false); onUpdate({ price }); } }}
+              className="w-full bg-secondary px-2 py-1 rounded text-xs font-medium text-card-foreground outline-none"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              onBlur={() => { setEditTitle(false); onUpdate({ title }); }}
+              onKeyDown={(e) => { if (e.key === "Enter") { setEditTitle(false); onUpdate({ title }); } }}
               autoFocus
             />
           ) : (
-            <span className="text-[10px] text-muted-foreground cursor-pointer hover:text-foreground" onClick={() => setEditPrice(true)}>
-              {price || "+ price"}
-            </span>
+            <h3
+              className="text-xs font-medium text-card-foreground cursor-pointer flex items-center gap-1"
+              onClick={() => setEditTitle(true)}
+            >
+              {title || "Untitled"}
+              <Pencil className="w-2.5 h-2.5 text-muted-foreground opacity-0 group-hover:opacity-100" />
+            </h3>
           )}
-        </div>
 
+          <div className="flex items-center justify-between pt-0.5">
+            {card.url ? (
+              <a
+                href={card.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-[10px] text-muted-foreground hover:text-foreground flex items-center gap-1 truncate max-w-[55%]"
+              >
+                <ExternalLink className="w-2.5 h-2.5 shrink-0" />
+                {(() => { try { return new URL(card.url).hostname; } catch { return card.url; } })()}
+              </a>
+            ) : (
+              <span />
+            )}
+
+            {editPrice ? (
+              <input
+                className="w-20 bg-primary/10 border border-primary/20 px-2 py-1 rounded text-xs text-right font-medium text-foreground outline-none focus:border-primary/40"
+                value={price}
+                placeholder="0.00"
+                onChange={(e) => setPrice(e.target.value)}
+                onBlur={() => { setEditPrice(false); onUpdate({ price }); }}
+                onKeyDown={(e) => { if (e.key === "Enter") { setEditPrice(false); onUpdate({ price }); } }}
+                autoFocus
+              />
+            ) : (
+              <button
+                className={`text-xs px-2 py-0.5 rounded font-medium transition-colors ${
+                  price
+                    ? "bg-primary/10 text-primary hover:bg-primary/15"
+                    : "bg-secondary text-muted-foreground hover:text-foreground hover:bg-secondary/80"
+                }`}
+                onClick={() => setEditPrice(true)}
+              >
+                {price ? `${price} €` : "+ price"}
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Action buttons */}
+      <div className="absolute top-2 right-2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity" onMouseDown={(e) => e.stopPropagation()}>
+        <button
+          onClick={onToggleCaption}
+          className="bg-card/80 backdrop-blur-sm border border-border/50 rounded p-1 text-muted-foreground hover:text-foreground"
+          title={card.show_caption ? "Hide caption" : "Show caption"}
+        >
+          {card.show_caption ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+        </button>
         <button
           onClick={onRemove}
-          className="absolute top-2 right-2 bg-card/80 rounded p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
+          className="bg-card/80 backdrop-blur-sm border border-border/50 rounded p-1 text-muted-foreground hover:text-destructive"
         >
           <Trash2 className="w-3 h-3" />
         </button>
