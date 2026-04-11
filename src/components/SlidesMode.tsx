@@ -1,44 +1,68 @@
 import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
-import { Plus, Trash2, GripVertical, Presentation, Loader2 } from "lucide-react";
+import { Presentation, Loader2, Eye, EyeOff, GripVertical, Heart, LayoutGrid, DollarSign } from "lucide-react";
 
-interface SlideItem {
+interface RoomData {
   id: string;
-  type: "room" | "item";
-  room_id?: string;
-  room_link_id?: string;
+  name: string;
+  description: string;
+  mood_colors: string[];
+  mood_images: string[];
+  items: BoardItem[];
+}
+
+interface BoardItem {
+  id: string;
   title: string;
   image: string;
   description: string;
+  url: string;
+  price: string;
+  status: string;
+  position_x: number;
+  position_y: number;
+  width: number;
+  height: number;
+  show_caption: boolean;
+}
+
+export interface SlideData {
+  id: string;
+  type: "mood" | "product" | "budget";
+  roomName: string;
+  roomId: string;
+  hidden: boolean;
+  room: RoomData;
 }
 
 interface SlidesModeProps {
   projectId: string;
 }
 
+const TYPE_ICON = { mood: Heart, product: LayoutGrid, budget: DollarSign };
+const TYPE_LABEL = { mood: "Mood", product: "Products", budget: "Budget" };
+
 const SlidesMode = ({ projectId }: SlidesModeProps) => {
   const navigate = useNavigate();
-  const [slides, setSlides] = useState<SlideItem[]>([]);
-  const [available, setAvailable] = useState<{ rooms: any[]; items: any[] }>({ rooms: [], items: [] });
+  const [slides, setSlides] = useState<SlideData[]>([]);
   const [loading, setLoading] = useState(true);
   const [dragIdx, setDragIdx] = useState<number | null>(null);
 
   const fetchData = useCallback(async () => {
     const { data: rooms } = await supabase
       .from("rooms")
-      .select("id, name")
-      .eq("project_id", projectId);
+      .select("id, name, description, mood_colors, mood_images")
+      .eq("project_id", projectId)
+      .order("created_at");
 
-    if (!rooms) { setLoading(false); return; }
+    if (!rooms || rooms.length === 0) { setSlides([]); setLoading(false); return; }
 
-    const roomMap: Record<string, string> = {};
-    rooms.forEach((r) => { roomMap[r.id] = r.name; });
-
+    const roomIds = rooms.map((r) => r.id);
     const { data: rlRows } = await supabase
       .from("room_links")
-      .select("id, link_id, room_id")
-      .in("room_id", rooms.map((r) => r.id));
+      .select("id, link_id, room_id, position_x, position_y, width, height, status, show_caption")
+      .in("room_id", roomIds);
 
     const linkIds = [...new Set(rlRows?.map((rl) => rl.link_id) || [])];
     const { data: links } = linkIds.length
@@ -48,43 +72,59 @@ const SlidesMode = ({ projectId }: SlidesModeProps) => {
     const linkMap: Record<string, any> = {};
     links?.forEach((l) => { linkMap[l.id] = l; });
 
-    const itemsList = (rlRows || []).map((rl) => {
-      const l = linkMap[rl.link_id] || {};
-      return {
-        room_link_id: rl.id,
-        room_id: rl.room_id,
-        title: l.title || "Untitled",
-        image: l.image || "",
-        description: l.description || "",
-        room_name: roomMap[rl.room_id] || "",
+    const roomDataMap: Record<string, RoomData> = {};
+    rooms.forEach((r) => {
+      roomDataMap[r.id] = {
+        id: r.id,
+        name: r.name,
+        description: r.description || "",
+        mood_colors: (r.mood_colors as string[]) || [],
+        mood_images: (r.mood_images as string[]) || [],
+        items: [],
       };
     });
 
-    setAvailable({
-      rooms: rooms.map((r) => ({ id: r.id, name: r.name })),
-      items: itemsList,
+    rlRows?.forEach((rl) => {
+      const l = linkMap[rl.link_id] || {};
+      roomDataMap[rl.room_id]?.items.push({
+        id: rl.id,
+        title: l.title || "",
+        image: l.image || "",
+        description: l.description || "",
+        url: l.url || "",
+        price: l.price || "",
+        status: rl.status || "idea",
+        position_x: rl.position_x,
+        position_y: rl.position_y,
+        width: rl.width || 260,
+        height: rl.height || 200,
+        show_caption: rl.show_caption !== false,
+      });
     });
+
+    const generated: SlideData[] = [];
+    rooms.forEach((r) => {
+      const rd = roomDataMap[r.id];
+      (["mood", "product", "budget"] as const).forEach((type) => {
+        generated.push({
+          id: `${r.id}-${type}`,
+          type,
+          roomName: r.name,
+          roomId: r.id,
+          hidden: false,
+          room: rd,
+        });
+      });
+    });
+
+    setSlides(generated);
     setLoading(false);
   }, [projectId]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
-  const addRoomSlide = (roomId: string, roomName: string) => {
-    setSlides((prev) => [
-      ...prev,
-      { id: `room-${roomId}-${Date.now()}`, type: "room", room_id: roomId, title: roomName, image: "", description: "" },
-    ]);
-  };
-
-  const addItemSlide = (item: any) => {
-    setSlides((prev) => [
-      ...prev,
-      { id: `item-${item.room_link_id}-${Date.now()}`, type: "item", room_link_id: item.room_link_id, title: item.title, image: item.image, description: item.description },
-    ]);
-  };
-
-  const removeSlide = (idx: number) => {
-    setSlides((prev) => prev.filter((_, i) => i !== idx));
+  const toggleHide = (idx: number) => {
+    setSlides((prev) => prev.map((s, i) => (i === idx ? { ...s, hidden: !s.hidden } : s)));
   };
 
   const onDragStart = (idx: number) => setDragIdx(idx);
@@ -102,10 +142,12 @@ const SlidesMode = ({ projectId }: SlidesModeProps) => {
   const onDragEnd = () => setDragIdx(null);
 
   const startPresentation = () => {
-    // Store slides in sessionStorage and navigate
-    sessionStorage.setItem("presentation-slides", JSON.stringify(slides));
+    const visible = slides.filter((s) => !s.hidden);
+    sessionStorage.setItem("presentation-slides", JSON.stringify(visible));
     navigate(`/projects/${projectId}/present`);
   };
+
+  const visibleCount = slides.filter((s) => !s.hidden).length;
 
   if (loading) {
     return (
@@ -116,92 +158,144 @@ const SlidesMode = ({ projectId }: SlidesModeProps) => {
   }
 
   return (
-    <div className="flex-1 flex overflow-hidden">
-      {/* Slide list */}
-      <div className="flex-1 overflow-auto p-6">
-        {slides.length === 0 ? (
-          <p className="text-sm text-muted-foreground text-center pt-20">
-            Add rooms or items from the sidebar to build your presentation
-          </p>
-        ) : (
-          <div className="space-y-3">
-            {slides.map((slide, idx) => (
-              <div
-                key={slide.id}
-                draggable
-                onDragStart={() => onDragStart(idx)}
-                onDragOver={(e) => onDragOver(e, idx)}
-                onDragEnd={onDragEnd}
-                className={`flex items-center gap-3 bg-card border border-border rounded-lg p-3 cursor-grab active:cursor-grabbing ${dragIdx === idx ? "opacity-50" : ""}`}
-              >
-                <GripVertical className="w-4 h-4 text-muted-foreground shrink-0" />
-                <span className="text-[10px] text-muted-foreground w-6 text-right">{idx + 1}</span>
-                {slide.image ? (
-                  <img src={slide.image} alt="" className="w-16 h-10 object-cover rounded" />
-                ) : (
-                  <div className="w-16 h-10 bg-secondary rounded flex items-center justify-center text-[10px] text-muted-foreground">
-                    {slide.type === "room" ? "Room" : "Item"}
+    <div className="flex-1 overflow-auto p-6">
+      {slides.length === 0 ? (
+        <p className="text-sm text-muted-foreground text-center pt-20">
+          Add rooms to your project to generate slides
+        </p>
+      ) : (
+        <>
+          <div className="flex items-center justify-between mb-4">
+            <p className="text-xs text-muted-foreground">
+              {visibleCount} of {slides.length} slides visible
+            </p>
+            <button
+              onClick={startPresentation}
+              disabled={visibleCount === 0}
+              className="bg-primary text-primary-foreground px-4 py-2 rounded-lg text-xs font-medium hover:opacity-90 disabled:opacity-50 flex items-center gap-2"
+            >
+              <Presentation className="w-4 h-4" />
+              Present
+            </button>
+          </div>
+
+          <div className="grid grid-cols-3 gap-3">
+            {slides.map((slide, idx) => {
+              const Icon = TYPE_ICON[slide.type];
+              return (
+                <div
+                  key={slide.id}
+                  draggable
+                  onDragStart={() => onDragStart(idx)}
+                  onDragOver={(e) => onDragOver(e, idx)}
+                  onDragEnd={onDragEnd}
+                  className={`relative border rounded-lg overflow-hidden cursor-grab active:cursor-grabbing transition-all ${
+                    slide.hidden
+                      ? "border-border/50 opacity-40"
+                      : "border-border hover:border-primary/30"
+                  } ${dragIdx === idx ? "opacity-30" : ""}`}
+                >
+                  {/* Mini slide preview */}
+                  <div className="aspect-video bg-card overflow-hidden relative">
+                    <SlidePreview slide={slide} />
                   </div>
-                )}
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-medium text-foreground truncate">{slide.title}</p>
-                  <p className="text-[10px] text-muted-foreground capitalize">{slide.type}</p>
+
+                  {/* Info bar */}
+                  <div className="px-3 py-2 bg-card border-t border-border flex items-center gap-2">
+                    <GripVertical className="w-3 h-3 text-muted-foreground shrink-0" />
+                    <Icon className="w-3 h-3 text-muted-foreground shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[10px] font-medium text-foreground truncate">{slide.roomName}</p>
+                      <p className="text-[9px] text-muted-foreground">{TYPE_LABEL[slide.type]}</p>
+                    </div>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); toggleHide(idx); }}
+                      className="text-muted-foreground hover:text-foreground"
+                    >
+                      {slide.hidden ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                    </button>
+                  </div>
                 </div>
-                <button onClick={() => removeSlide(idx)} className="text-muted-foreground hover:text-destructive">
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            ))}
+              );
+            })}
           </div>
-        )}
+        </>
+      )}
+    </div>
+  );
+};
 
-        {slides.length > 0 && (
-          <button
-            onClick={startPresentation}
-            className="mt-6 bg-primary text-primary-foreground px-4 py-2.5 rounded-lg text-xs font-medium hover:opacity-90 flex items-center gap-2 mx-auto"
-          >
-            <Presentation className="w-4 h-4" />
-            Present
-          </button>
-        )}
-      </div>
+// ── Mini previews ──────────────────────────────────────
+const SlidePreview = ({ slide }: { slide: SlideData }) => {
+  if (slide.type === "mood") return <MoodPreview room={slide.room} />;
+  if (slide.type === "product") return <ProductPreview room={slide.room} />;
+  return <BudgetPreview room={slide.room} />;
+};
 
-      {/* Sidebar: add slides */}
-      <div className="w-56 shrink-0 border-l border-border overflow-auto p-4 space-y-4">
-        <div>
-          <h3 className="text-[10px] uppercase tracking-wider text-muted-foreground mb-2">Rooms</h3>
-          <div className="space-y-1">
-            {available.rooms.map((r) => (
-              <button
-                key={r.id}
-                onClick={() => addRoomSlide(r.id, r.name)}
-                className="w-full text-left text-xs px-2 py-1.5 rounded hover:bg-secondary flex items-center gap-2 text-foreground"
-              >
-                <Plus className="w-3 h-3 text-muted-foreground" /> {r.name}
-              </button>
-            ))}
-          </div>
-        </div>
-        <div>
-          <h3 className="text-[10px] uppercase tracking-wider text-muted-foreground mb-2">Items</h3>
-          <div className="space-y-1">
-            {available.items.map((item) => (
-              <button
-                key={item.room_link_id}
-                onClick={() => addItemSlide(item)}
-                className="w-full text-left text-xs px-2 py-1.5 rounded hover:bg-secondary flex items-center gap-2 text-foreground"
-              >
-                {item.image ? (
-                  <img src={item.image} alt="" className="w-5 h-5 object-cover rounded shrink-0" />
-                ) : (
-                  <Plus className="w-3 h-3 text-muted-foreground shrink-0" />
-                )}
-                <span className="truncate">{item.title}</span>
-              </button>
-            ))}
-          </div>
-        </div>
+const MoodPreview = ({ room }: { room: RoomData }) => (
+  <div className="w-full h-full p-3 flex flex-col gap-2">
+    <p className="text-[9px] font-semibold text-foreground truncate">{room.name}</p>
+    {room.description && (
+      <p className="text-[8px] text-muted-foreground line-clamp-2">{room.description}</p>
+    )}
+    {room.mood_colors.length > 0 && (
+      <div className="flex gap-0.5">
+        {room.mood_colors.slice(0, 8).map((c) => (
+          <div key={c} className="w-3 h-3 rounded-sm" style={{ backgroundColor: c }} />
+        ))}
       </div>
+    )}
+    {room.mood_images.length > 0 && (
+      <div className="flex-1 flex gap-1 overflow-hidden">
+        {room.mood_images.slice(0, 3).map((url, i) => (
+          <img key={i} src={url} alt="" className="h-full object-cover rounded-sm flex-1 min-w-0" />
+        ))}
+      </div>
+    )}
+  </div>
+);
+
+const ProductPreview = ({ room }: { room: RoomData }) => (
+  <div className="w-full h-full relative p-1">
+    {room.items.length === 0 && (
+      <p className="text-[8px] text-muted-foreground absolute inset-0 flex items-center justify-center">No products</p>
+    )}
+    {room.items.slice(0, 12).map((item) => {
+      // Scale positions to thumbnail size
+      const scale = 0.12;
+      return (
+        <div
+          key={item.id}
+          className="absolute bg-secondary rounded-sm overflow-hidden"
+          style={{
+            left: item.position_x * scale,
+            top: item.position_y * scale,
+            width: item.width * scale,
+            height: item.height * scale,
+          }}
+        >
+          {item.image && <img src={item.image} alt="" className="w-full h-full object-cover" />}
+        </div>
+      );
+    })}
+  </div>
+);
+
+const BudgetPreview = ({ room }: { room: RoomData }) => {
+  const withPrice = room.items.filter((i) => i.price && !isNaN(parseFloat(i.price)));
+  const total = withPrice.reduce((s, i) => s + parseFloat(i.price), 0);
+  return (
+    <div className="w-full h-full p-3 flex flex-col gap-1">
+      <p className="text-[9px] font-semibold text-foreground">{room.name} — Budget</p>
+      <p className="text-[8px] text-muted-foreground">{room.items.length} items</p>
+      <p className="text-[10px] font-bold text-foreground mt-auto">{total.toFixed(2)} €</p>
+      {room.items.slice(0, 4).map((item) => (
+        <div key={item.id} className="flex items-center gap-1">
+          <div className="w-2 h-2 bg-secondary rounded-sm shrink-0" />
+          <span className="text-[7px] text-muted-foreground truncate flex-1">{item.title || "—"}</span>
+          <span className="text-[7px] text-foreground">{item.price || "—"}</span>
+        </div>
+      ))}
     </div>
   );
 };
