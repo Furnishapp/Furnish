@@ -86,6 +86,7 @@ export type Database = {
           position_x: number
           position_y: number
           room_id: string
+          show_caption: boolean
           status: string
           width: number
         }
@@ -97,6 +98,7 @@ export type Database = {
           position_x?: number
           position_y?: number
           room_id: string
+          show_caption?: boolean
           status?: string
           width?: number
         }
@@ -108,6 +110,7 @@ export type Database = {
           position_x?: number
           position_y?: number
           room_id?: string
+          show_caption?: boolean
           status?: string
           width?: number
         }
@@ -131,7 +134,10 @@ export type Database = {
       rooms: {
         Row: {
           created_at: string
+          description: string
           id: string
+          mood_colors: string[]
+          mood_images: string[]
           name: string
           position_x: number
           position_y: number
@@ -140,7 +146,10 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          description?: string
           id?: string
+          mood_colors?: string[]
+          mood_images?: string[]
           name: string
           position_x?: number
           position_y?: number
@@ -149,7 +158,10 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          description?: string
           id?: string
+          mood_colors?: string[]
+          mood_images?: string[]
           name?: string
           position_x?: number
           position_y?: number
