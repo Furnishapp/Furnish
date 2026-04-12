@@ -41,6 +41,7 @@ const App = () => (
           <Route path="/projects/:projectId" element={<ProtectedRoute><ProjectDetail /></ProtectedRoute>} />
           <Route path="/projects/:projectId/rooms/:roomId" element={<ProtectedRoute><RoomView /></ProtectedRoute>} />
           <Route path="/projects/:projectId/present" element={<ProtectedRoute><PresentationView /></ProtectedRoute>} />
+          <Route path="/shared/:token" element={<SharedPresentationView />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
