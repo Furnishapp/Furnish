@@ -159,7 +159,8 @@ const ProductSlide = ({ slide }: { slide: SlideData }) => {
   const HEADER_H = 80;
   const availW = SLIDE_W - PAD * 2;
   const availH = SLIDE_H - HEADER_H - PAD;
-  const fitScale = Math.min(availW / bw, availH / bh, 1.5);
+  // Always fit — remove the 1.5 cap so large boards dezoom properly
+  const fitScale = Math.min(availW / bw, availH / bh);
 
   const scaledW = bw * fitScale;
   const scaledH = bh * fitScale;
