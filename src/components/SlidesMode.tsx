@@ -1,7 +1,12 @@
 import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
 import { useNavigate } from "react-router-dom";
-import { Presentation, Loader2, Eye, EyeOff, GripVertical, Heart, LayoutGrid, DollarSign } from "lucide-react";
+import {
+  Presentation, Loader2, Eye, EyeOff, GripVertical, Heart,
+  LayoutGrid, DollarSign, FileText, Share2, Copy, Check,
+} from "lucide-react";
+import { toast } from "sonner";
 
 interface RoomData {
   id: string;
@@ -27,42 +32,65 @@ interface BoardItem {
   show_caption: boolean;
 }
 
+export interface BriefData {
+  description: string;
+  address: string;
+  goals: string;
+  clientName: string;
+  clientContact: string;
+}
+
 export interface SlideData {
   id: string;
-  type: "mood" | "product" | "budget";
+  type: "brief" | "mood" | "product" | "budget";
   roomName: string;
   roomId: string;
   hidden: boolean;
   room: RoomData;
+  brief?: BriefData;
+  projectName?: string;
 }
 
 interface SlidesModeProps {
   projectId: string;
 }
 
-const TYPE_ICON = { mood: Heart, product: LayoutGrid, budget: DollarSign };
-const TYPE_LABEL = { mood: "Mood", product: "Products", budget: "Budget" };
+const TYPE_ICON = { brief: FileText, mood: Heart, product: LayoutGrid, budget: DollarSign };
+const TYPE_LABEL = { brief: "Brief", mood: "Mood", product: "Products", budget: "Budget" };
 
 const SlidesMode = ({ projectId }: SlidesModeProps) => {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [slides, setSlides] = useState<SlideData[]>([]);
   const [loading, setLoading] = useState(true);
   const [dragIdx, setDragIdx] = useState<number | null>(null);
+  const [sharing, setSharing] = useState(false);
+  const [shareUrl, setShareUrl] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   const fetchData = useCallback(async () => {
+    // Fetch project info
+    const { data: project } = await supabase
+      .from("projects")
+      .select("name, description")
+      .eq("id", projectId)
+      .single();
+
     const { data: rooms } = await supabase
       .from("rooms")
       .select("id, name, description, mood_colors, mood_images")
       .eq("project_id", projectId)
       .order("created_at");
 
-    if (!rooms || rooms.length === 0) { setSlides([]); setLoading(false); return; }
+    if (!rooms) { setSlides([]); setLoading(false); return; }
 
     const roomIds = rooms.map((r) => r.id);
-    const { data: rlRows } = await supabase
-      .from("room_links")
-      .select("id, link_id, room_id, position_x, position_y, width, height, status, show_caption")
-      .in("room_id", roomIds);
+    const { data: rlRows } = roomIds.length
+      ? await supabase
+          .from("room_links")
+          .select("id, link_id, room_id, position_x, position_y, width, height, status, show_caption")
+          .in("room_id", roomIds)
+      : { data: [] };
 
     const linkIds = [...new Set(rlRows?.map((rl) => rl.link_id) || [])];
     const { data: links } = linkIds.length
@@ -102,7 +130,39 @@ const SlidesMode = ({ projectId }: SlidesModeProps) => {
       });
     });
 
+    // Parse brief data from project description
+    let briefData: BriefData | undefined;
+    if (project?.description) {
+      try {
+        const parsed = JSON.parse(project.description);
+        if (parsed.brief) {
+          briefData = {
+            description: parsed.brief.description || "",
+            address: parsed.brief.address || "",
+            goals: parsed.brief.goals || "",
+            clientName: parsed.brief.clientName || "",
+            clientContact: parsed.brief.clientContact || "",
+          };
+        }
+      } catch { /* not JSON, skip */ }
+    }
+
     const generated: SlideData[] = [];
+
+    // Brief slide first
+    const emptyRoom: RoomData = { id: "", name: "", description: "", mood_colors: [], mood_images: [], items: [] };
+    generated.push({
+      id: "brief",
+      type: "brief",
+      roomName: project?.name || "Project",
+      roomId: "",
+      hidden: false,
+      room: emptyRoom,
+      brief: briefData,
+      projectName: project?.name,
+    });
+
+    // Room slides
     rooms.forEach((r) => {
       const rd = roomDataMap[r.id];
       (["mood", "product", "budget"] as const).forEach((type) => {
@@ -147,6 +207,58 @@ const SlidesMode = ({ projectId }: SlidesModeProps) => {
     navigate(`/projects/${projectId}/present`);
   };
 
+  const sharePresentation = async () => {
+    if (!user) return;
+    setSharing(true);
+    try {
+      const visible = slides.filter((s) => !s.hidden);
+
+      // Check for existing share
+      const { data: existing } = await supabase
+        .from("shared_presentations")
+        .select("share_token")
+        .eq("project_id", projectId)
+        .eq("created_by", user.id)
+        .limit(1);
+
+      let token: string;
+
+      if (existing && existing.length > 0) {
+        // Update existing
+        token = existing[0].share_token;
+        await supabase
+          .from("shared_presentations")
+          .update({ slides_data: visible as any })
+          .eq("project_id", projectId)
+          .eq("created_by", user.id);
+      } else {
+        // Create new
+        const { data, error } = await supabase
+          .from("shared_presentations")
+          .insert({ project_id: projectId, created_by: user.id, slides_data: visible as any })
+          .select("share_token")
+          .single();
+        if (error) throw error;
+        token = data.share_token;
+      }
+
+      const url = `${window.location.origin}/shared/${token}`;
+      setShareUrl(url);
+      toast.success("Share link created!");
+    } catch (err) {
+      toast.error("Failed to create share link");
+    } finally {
+      setSharing(false);
+    }
+  };
+
+  const copyLink = () => {
+    if (!shareUrl) return;
+    navigator.clipboard.writeText(shareUrl);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
   const visibleCount = slides.filter((s) => !s.hidden).length;
 
   if (loading) {
@@ -169,15 +281,39 @@ const SlidesMode = ({ projectId }: SlidesModeProps) => {
             <p className="text-xs text-muted-foreground">
               {visibleCount} of {slides.length} slides visible
             </p>
-            <button
-              onClick={startPresentation}
-              disabled={visibleCount === 0}
-              className="bg-primary text-primary-foreground px-4 py-2 rounded-lg text-xs font-medium hover:opacity-90 disabled:opacity-50 flex items-center gap-2"
-            >
-              <Presentation className="w-4 h-4" />
-              Present
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={sharePresentation}
+                disabled={visibleCount === 0 || sharing}
+                className="border border-border text-foreground px-4 py-2 rounded-lg text-xs font-medium hover:bg-secondary disabled:opacity-50 flex items-center gap-2"
+              >
+                {sharing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Share2 className="w-4 h-4" />}
+                Share
+              </button>
+              <button
+                onClick={startPresentation}
+                disabled={visibleCount === 0}
+                className="bg-primary text-primary-foreground px-4 py-2 rounded-lg text-xs font-medium hover:opacity-90 disabled:opacity-50 flex items-center gap-2"
+              >
+                <Presentation className="w-4 h-4" />
+                Present
+              </button>
+            </div>
           </div>
+
+          {/* Share URL banner */}
+          {shareUrl && (
+            <div className="mb-4 p-3 bg-secondary rounded-lg flex items-center gap-3">
+              <span className="text-xs text-muted-foreground flex-1 truncate">{shareUrl}</span>
+              <button
+                onClick={copyLink}
+                className="shrink-0 flex items-center gap-1.5 text-xs font-medium text-foreground hover:opacity-70"
+              >
+                {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                {copied ? "Copied" : "Copy"}
+              </button>
+            </div>
+          )}
 
           <div className="grid grid-cols-3 gap-3">
             {slides.map((slide, idx) => {
@@ -195,12 +331,9 @@ const SlidesMode = ({ projectId }: SlidesModeProps) => {
                       : "border-border hover:border-primary/30"
                   } ${dragIdx === idx ? "opacity-30" : ""}`}
                 >
-                  {/* Mini slide preview */}
                   <div className="aspect-video bg-card overflow-hidden relative">
                     <SlidePreview slide={slide} />
                   </div>
-
-                  {/* Info bar */}
                   <div className="px-3 py-2 bg-card border-t border-border flex items-center gap-2">
                     <GripVertical className="w-3 h-3 text-muted-foreground shrink-0" />
                     <Icon className="w-3 h-3 text-muted-foreground shrink-0" />
@@ -227,10 +360,28 @@ const SlidesMode = ({ projectId }: SlidesModeProps) => {
 
 // ── Mini previews ──────────────────────────────────────
 const SlidePreview = ({ slide }: { slide: SlideData }) => {
+  if (slide.type === "brief") return <BriefPreview slide={slide} />;
   if (slide.type === "mood") return <MoodPreview room={slide.room} />;
   if (slide.type === "product") return <ProductPreview room={slide.room} />;
   return <BudgetPreview room={slide.room} />;
 };
+
+const BriefPreview = ({ slide }: { slide: SlideData }) => (
+  <div className="w-full h-full p-3 flex flex-col gap-1">
+    <p className="text-[9px] font-semibold text-foreground">{slide.projectName || "Project"}</p>
+    <p className="text-[7px] text-muted-foreground">Brief</p>
+    {slide.brief && (
+      <>
+        {slide.brief.description && (
+          <p className="text-[7px] text-muted-foreground line-clamp-2">{slide.brief.description}</p>
+        )}
+        {slide.brief.clientName && (
+          <p className="text-[7px] text-muted-foreground mt-auto">Client: {slide.brief.clientName}</p>
+        )}
+      </>
+    )}
+  </div>
+);
 
 const MoodPreview = ({ room }: { room: RoomData }) => (
   <div className="w-full h-full p-3 flex flex-col gap-2">
@@ -261,7 +412,6 @@ const ProductPreview = ({ room }: { room: RoomData }) => (
       <p className="text-[8px] text-muted-foreground absolute inset-0 flex items-center justify-center">No products</p>
     )}
     {room.items.slice(0, 12).map((item) => {
-      // Scale positions to thumbnail size
       const scale = 0.12;
       return (
         <div

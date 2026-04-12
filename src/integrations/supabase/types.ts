@@ -178,6 +178,44 @@ export type Database = {
           },
         ]
       }
+      shared_presentations: {
+        Row: {
+          created_at: string
+          created_by: string
+          id: string
+          project_id: string
+          share_token: string
+          slides_data: Json
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          id?: string
+          project_id: string
+          share_token?: string
+          slides_data?: Json
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          id?: string
+          project_id?: string
+          share_token?: string
+          slides_data?: Json
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "shared_presentations_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
