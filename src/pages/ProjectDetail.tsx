@@ -2,14 +2,16 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Loader2, Map, DollarSign, Presentation } from "lucide-react";
+import { ArrowLeft, Loader2, Map, DollarSign, Presentation, FileText } from "lucide-react";
 import PlanMode from "@/components/PlanMode";
 import BudgetMode from "@/components/BudgetMode";
 import SlidesMode from "@/components/SlidesMode";
+import BriefMode from "@/components/BriefMode";
 
-type Tab = "plan" | "budget" | "slides";
+type Tab = "brief" | "plan" | "budget" | "slides";
 
 const tabs: { key: Tab; label: string; icon: typeof Map }[] = [
+  { key: "brief", label: "Brief", icon: FileText },
   { key: "plan", label: "Plan", icon: Map },
   { key: "budget", label: "Budget", icon: DollarSign },
   { key: "slides", label: "Slides", icon: Presentation },
@@ -21,7 +23,7 @@ const ProjectDetail = () => {
   const navigate = useNavigate();
   const [projectName, setProjectName] = useState("");
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<Tab>("plan");
+  const [activeTab, setActiveTab] = useState<Tab>("brief");
 
   useEffect(() => {
     if (!user || !projectId) return;
@@ -72,6 +74,7 @@ const ProjectDetail = () => {
         </div>
       </header>
 
+      {projectId && activeTab === "brief" && <BriefMode projectId={projectId} />}
       {projectId && activeTab === "plan" && <PlanMode projectId={projectId} />}
       {projectId && activeTab === "budget" && <BudgetMode projectId={projectId} />}
       {projectId && activeTab === "slides" && <SlidesMode projectId={projectId} />}
