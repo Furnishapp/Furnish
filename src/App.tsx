@@ -9,6 +9,7 @@ import Projects from "./pages/Projects";
 import ProjectDetail from "./pages/ProjectDetail";
 import RoomView from "./pages/RoomView";
 import PresentationView from "./pages/PresentationView";
+import SharedPresentationView from "./pages/SharedPresentationView";
 import NotFound from "./pages/NotFound";
 import { Loader2 } from "lucide-react";
 
