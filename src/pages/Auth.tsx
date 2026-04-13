@@ -34,10 +34,8 @@ const Auth = () => {
     <div className="min-h-screen bg-background flex items-center justify-center px-4">
       <div className="w-full max-w-sm space-y-6">
         <div className="text-center">
-          <h1 className="text-xl font-semibold text-foreground">Moodboard</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            {isSignUp ? "Create an account" : "Sign in to continue"}
-          </p>
+          <h1 className="text-xl font-semibold text-foreground">Furnish</h1>
+          <p className="text-sm text-muted-foreground mt-1">{isSignUp ? "Create an account" : "Sign in to continue"}</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-3">
@@ -73,7 +71,11 @@ const Auth = () => {
         <p className="text-center text-xs text-muted-foreground">
           {isSignUp ? "Already have an account?" : "Don't have an account?"}{" "}
           <button
-            onClick={() => { setIsSignUp(!isSignUp); setError(""); setMessage(""); }}
+            onClick={() => {
+              setIsSignUp(!isSignUp);
+              setError("");
+              setMessage("");
+            }}
             className="text-foreground underline"
           >
             {isSignUp ? "Sign In" : "Sign Up"}
