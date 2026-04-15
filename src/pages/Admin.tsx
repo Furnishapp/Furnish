@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import {
   Loader2,
@@ -8,10 +8,13 @@ import {
   ChevronDown,
   ChevronRight,
   Lock,
+  RefreshCw,
 } from "lucide-react";
 
-const ADMIN_PASSWORD = "VWfurnish";
+// ADMIN_PASSWORD is NOT stored here — it lives in Supabase Vault as a secret
+// and is verified server-side by the admin-stats edge function only.
 const SESSION_KEY = "furnish_admin_auth";
+const POLL_MS = 30_000; // background refresh every 30 s
 
 type UserStat = {
   user_id: string;
@@ -39,36 +42,101 @@ const Admin = () => {
   const [users, setUsers] = useState<UserStat[]>([]);
   const [projects, setProjects] = useState<ProjectStat[]>([]);
   const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [fetchError, setFetchError] = useState<string | null>(null);
   const [expandedUser, setExpandedUser] = useState<string | null>(null);
 
-  const handlePasswordSubmit = (e: React.FormEvent) => {
+  // The verified password is kept only in JS heap memory — never written to
+  // the DOM, localStorage, or sessionStorage. Polling uses it for re-fetches.
+  const passwordRef = useRef<string>("");
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  /* ── Helpers ────────────────────────────────────────────────────────── */
+  const normaliseUsers = (rows: UserStat[]) =>
+    rows.map((u) => ({
+      ...u,
+      project_count: Number(u.project_count),
+      product_count: Number(u.product_count),
+    }));
+
+  const normaliseProjects = (rows: ProjectStat[]) =>
+    rows.map((p) => ({ ...p, product_count: Number(p.product_count) }));
+
+  /* ── Password form ──────────────────────────────────────────────────── */
+  const handlePasswordSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (password === ADMIN_PASSWORD) {
-      sessionStorage.setItem(SESSION_KEY, "true");
-      setAuthenticated(true);
-      setPasswordError(false);
-    } else {
+    setLoading(true);
+    setPasswordError(false);
+
+    // Password is sent to the edge function and verified server-side.
+    // The function returns { users, projects } on success or status 401 on failure.
+    const { data, error } = await supabase.functions.invoke("admin-stats", {
+      body: { password },
+    });
+
+    if (error || data?.error) {
       setPasswordError(true);
       setPassword("");
+      setLoading(false);
+      return;
     }
-  };
 
-  const fetchData = async () => {
-    setLoading(true);
-    const [{ data: userStats }, { data: projectStats }] = await Promise.all([
-      supabase.rpc("get_admin_stats"),
-      supabase.rpc("get_admin_projects"),
-    ]);
-    if (userStats) setUsers(userStats as UserStat[]);
-    if (projectStats) setProjects(projectStats as ProjectStat[]);
+    // Correct password — store in ref (heap only) and populate dashboard.
+    passwordRef.current = password;
+    sessionStorage.setItem(SESSION_KEY, "true");
+    setAuthenticated(true);
+    setPasswordError(false);
+    if (data.users) setUsers(normaliseUsers(data.users as UserStat[]));
+    if (data.projects) setProjects(normaliseProjects(data.projects as ProjectStat[]));
+    setLastUpdated(new Date());
     setLoading(false);
   };
 
+  /* ── Data re-fetch (polling + manual refresh) ───────────────────────── */
+  const fetchData = async (silent = false) => {
+    if (!passwordRef.current) return; // page reloaded — ref is empty, skip
+    if (silent) setRefreshing(true);
+    else setLoading(true);
+    setFetchError(null);
+
+    const { data, error } = await supabase.functions.invoke("admin-stats", {
+      body: { password: passwordRef.current },
+    });
+
+    if (error || data?.error) {
+      setFetchError((error as { message?: string } | null)?.message ?? data?.error ?? "Unknown error");
+    } else {
+      if (data.users) setUsers(normaliseUsers(data.users as UserStat[]));
+      if (data.projects) setProjects(normaliseProjects(data.projects as ProjectStat[]));
+      setLastUpdated(new Date());
+    }
+
+    if (silent) setRefreshing(false);
+    else setLoading(false);
+  };
+
+  /* ── Start polling once authenticated with a live passwordRef ───────── */
   useEffect(() => {
-    if (authenticated) fetchData();
+    if (!authenticated || !passwordRef.current) return;
+    pollRef.current = setInterval(() => fetchData(true), POLL_MS);
+    return () => {
+      if (pollRef.current) clearInterval(pollRef.current);
+    };
   }, [authenticated]);
 
-  /* ── Password gate ─────────────────────────────────────────────────── */
+  /* ── Sign out ───────────────────────────────────────────────────────── */
+  const handleSignOut = () => {
+    sessionStorage.removeItem(SESSION_KEY);
+    passwordRef.current = "";
+    if (pollRef.current) clearInterval(pollRef.current);
+    setAuthenticated(false);
+    setPassword("");
+    setUsers([]);
+    setProjects([]);
+  };
+
+  /* ── Password gate ──────────────────────────────────────────────────── */
   if (!authenticated) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -103,8 +171,10 @@ const Admin = () => {
             )}
             <button
               type="submit"
-              className="w-full bg-primary text-primary-foreground px-4 py-2.5 rounded-lg text-sm font-medium hover:opacity-90 transition-opacity"
+              disabled={loading}
+              className="w-full bg-primary text-primary-foreground px-4 py-2.5 rounded-lg text-sm font-medium hover:opacity-90 transition-opacity disabled:opacity-50 flex items-center justify-center gap-2"
             >
+              {loading && <Loader2 className="w-4 h-4 animate-spin" />}
               Continue
             </button>
           </form>
@@ -113,41 +183,67 @@ const Admin = () => {
     );
   }
 
-  /* ── Dashboard ─────────────────────────────────────────────────────── */
-  const totalProjects = users.reduce((s, u) => s + Number(u.project_count), 0);
-  const totalProducts = users.reduce((s, u) => s + Number(u.product_count), 0);
+  /* ── Dashboard ──────────────────────────────────────────────────────── */
+  const totalProjects = users.reduce((s, u) => s + u.project_count, 0);
+  const totalProducts = users.reduce((s, u) => s + u.product_count, 0);
 
   return (
     <div className="min-h-screen bg-background">
       <header className="sticky top-0 z-10 bg-background/80 backdrop-blur-sm border-b border-border">
         <div className="max-w-5xl mx-auto px-6 py-4 flex items-center justify-between">
-          <h1 className="text-base font-semibold text-foreground">Admin</h1>
-          <button
-            onClick={() => {
-              sessionStorage.removeItem(SESSION_KEY);
-              setAuthenticated(false);
-              setPassword("");
-            }}
-            className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-          >
-            Sign out
-          </button>
+          <div className="flex items-center gap-3">
+            <h1 className="text-base font-semibold text-foreground">Admin</h1>
+            {lastUpdated && (
+              <span className="text-xs text-muted-foreground">
+                Updated {lastUpdated.toLocaleTimeString()}
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-4">
+            <button
+              onClick={() => fetchData(true)}
+              disabled={refreshing || loading}
+              title="Refresh"
+              className="text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? "animate-spin" : ""}`} />
+            </button>
+            <button
+              onClick={handleSignOut}
+              className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Sign out
+            </button>
+          </div>
         </div>
       </header>
 
       <main className="max-w-5xl mx-auto px-6 py-8 space-y-8">
+        {/* ── Loading ────────────────────────────────────────────────── */}
         {loading ? (
           <div className="flex items-center justify-center py-20">
             <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
           </div>
+        ) : fetchError ? (
+          /* ── Error ───────────────────────────────────────────────── */
+          <div className="bg-destructive/10 border border-destructive/30 rounded-lg px-5 py-4 text-sm text-destructive space-y-2">
+            <p className="font-medium">Failed to load admin data</p>
+            <p className="text-xs opacity-80">{fetchError}</p>
+            <button
+              onClick={() => fetchData()}
+              className="text-xs underline opacity-80 hover:opacity-100"
+            >
+              Retry
+            </button>
+          </div>
         ) : (
           <>
-            {/* ── Summary cards ──────────────────────────────────────── */}
+            {/* ── Summary cards ────────────────────────────────────── */}
             <div className="grid grid-cols-3 gap-4">
               <div className="bg-card border border-border rounded-lg px-5 py-4">
                 <div className="flex items-center gap-2 text-muted-foreground mb-2">
                   <Users className="w-3.5 h-3.5" />
-                  <span className="text-xs">Users</span>
+                  <span className="text-xs">Accounts</span>
                 </div>
                 <p className="text-2xl font-semibold text-foreground">{users.length}</p>
               </div>
@@ -161,16 +257,16 @@ const Admin = () => {
               <div className="bg-card border border-border rounded-lg px-5 py-4">
                 <div className="flex items-center gap-2 text-muted-foreground mb-2">
                   <Package className="w-3.5 h-3.5" />
-                  <span className="text-xs">Products</span>
+                  <span className="text-xs">Saved products</span>
                 </div>
                 <p className="text-2xl font-semibold text-foreground">{totalProducts}</p>
               </div>
             </div>
 
-            {/* ── Users table ────────────────────────────────────────── */}
+            {/* ── Users table ──────────────────────────────────────── */}
             <div>
               <h2 className="text-sm font-medium text-foreground mb-3">
-                All accounts&nbsp;
+                All accounts{" "}
                 <span className="text-muted-foreground font-normal">({users.length})</span>
               </h2>
 
@@ -200,7 +296,7 @@ const Admin = () => {
                           colSpan={5}
                           className="px-5 py-12 text-center text-muted-foreground text-sm"
                         >
-                          No users found
+                          No accounts found
                         </td>
                       </tr>
                     ) : (
@@ -212,10 +308,10 @@ const Admin = () => {
                         const hasProjects = userProjects.length > 0;
 
                         return (
-                          <>
+                          <React.Fragment key={u.user_id}>
+                            {/* ── User row ─────────────────────────── */}
                             <tr
-                              key={u.user_id}
-                              className={`border-b border-border last:border-b-0 transition-colors ${
+                              className={`border-b border-border transition-colors ${
                                 hasProjects
                                   ? "hover:bg-secondary/20 cursor-pointer"
                                   : ""
@@ -235,10 +331,10 @@ const Admin = () => {
                                 )}
                               </td>
                               <td className="px-5 py-3.5 text-right text-card-foreground tabular-nums">
-                                {Number(u.project_count)}
+                                {u.project_count}
                               </td>
                               <td className="px-5 py-3.5 text-right text-card-foreground tabular-nums">
-                                {Number(u.product_count)}
+                                {u.product_count}
                               </td>
                               <td className="px-3 py-3.5 text-muted-foreground">
                                 {hasProjects &&
@@ -250,12 +346,12 @@ const Admin = () => {
                               </td>
                             </tr>
 
-                            {/* ── Per-project sub-rows ────────────────── */}
+                            {/* ── Per-project sub-rows ─────────────── */}
                             {expanded &&
                               userProjects.map((proj) => (
                                 <tr
                                   key={proj.project_id}
-                                  className="border-b border-border last:border-b-0 bg-secondary/10"
+                                  className="border-b border-border bg-secondary/10"
                                 >
                                   <td
                                     className="pl-12 pr-5 py-2.5 text-muted-foreground"
@@ -267,22 +363,19 @@ const Admin = () => {
                                     </div>
                                   </td>
                                   <td className="px-5 py-2.5 text-right text-xs text-muted-foreground tabular-nums">
-                                    {new Date(
-                                      proj.project_created_at
-                                    ).toLocaleDateString("en-GB", {
-                                      day: "2-digit",
-                                      month: "short",
-                                      year: "numeric",
-                                    })}
+                                    {new Date(proj.project_created_at).toLocaleDateString(
+                                      "en-GB",
+                                      { day: "2-digit", month: "short", year: "numeric" }
+                                    )}
                                   </td>
                                   <td className="px-5 py-2.5 text-right text-xs text-muted-foreground tabular-nums">
-                                    {Number(proj.product_count)} product
-                                    {Number(proj.product_count) !== 1 ? "s" : ""}
+                                    {proj.product_count} product
+                                    {proj.product_count !== 1 ? "s" : ""}
                                   </td>
                                   <td className="px-3 py-2.5" />
                                 </tr>
                               ))}
-                          </>
+                          </React.Fragment>
                         );
                       })
                     )}
