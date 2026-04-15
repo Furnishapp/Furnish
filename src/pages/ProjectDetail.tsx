@@ -7,6 +7,7 @@ import PlanMode from "@/components/PlanMode";
 import BudgetMode from "@/components/BudgetMode";
 import SlidesMode from "@/components/SlidesMode";
 import BriefMode from "@/components/BriefMode";
+import ProjectProductPanel from "@/components/ProjectProductPanel";
 
 type Tab = "brief" | "plan" | "budget" | "slides";
 
@@ -74,10 +75,17 @@ const ProjectDetail = () => {
         </div>
       </header>
 
-      {projectId && activeTab === "brief" && <BriefMode projectId={projectId} />}
-      {projectId && activeTab === "plan" && <PlanMode projectId={projectId} />}
-      {projectId && activeTab === "budget" && <BudgetMode projectId={projectId} />}
-      {projectId && activeTab === "slides" && <SlidesMode projectId={projectId} />}
+      <div className="flex-1 flex min-h-0 overflow-hidden">
+        <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+          {projectId && activeTab === "brief" && <BriefMode projectId={projectId} />}
+          {projectId && activeTab === "plan" && <PlanMode projectId={projectId} />}
+          {projectId && activeTab === "budget" && <BudgetMode projectId={projectId} />}
+          {projectId && activeTab === "slides" && <SlidesMode projectId={projectId} />}
+        </div>
+        {projectId && activeTab !== "slides" && (
+          <ProjectProductPanel projectId={projectId} />
+        )}
+      </div>
     </div>
   );
 };

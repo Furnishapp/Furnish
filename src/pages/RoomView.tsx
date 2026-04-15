@@ -5,6 +5,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { Plus, Loader2, ArrowLeft, ExternalLink, Pencil, Trash2, DollarSign, LayoutGrid, Heart, Eye, EyeOff } from "lucide-react";
 import RoomBudgetView from "@/components/RoomBudgetView";
 import MoodMode from "@/components/MoodMode";
+import ProjectProductPanel from "@/components/ProjectProductPanel";
 
 interface RoomLink {
   id: string;
@@ -283,35 +284,46 @@ const RoomView = () => {
         </div>
       </header>
 
-      {activeTab === "mood" && roomId ? (
-        <MoodMode roomId={roomId} />
-      ) : activeTab === "budget" && roomId ? (
-        <RoomBudgetView roomId={roomId} />
-      ) : (
-        <div
-          ref={canvasRef}
-          className="flex-1 relative overflow-auto"
-          style={{ backgroundImage: "radial-gradient(circle, hsl(var(--border)) 1px, transparent 1px)", backgroundSize: "24px 24px" }}
-        >
-          {cards.length === 0 && (
-            <p className="absolute inset-0 flex items-center justify-center text-sm text-muted-foreground">
-              Add links above to start your moodboard
-            </p>
-          )}
+      <div className="flex-1 flex min-h-0 overflow-hidden">
+        <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+          {activeTab === "mood" && roomId ? (
+            <MoodMode roomId={roomId} />
+          ) : activeTab === "budget" && roomId ? (
+            <RoomBudgetView roomId={roomId} />
+          ) : (
+            <div
+              ref={canvasRef}
+              className="flex-1 relative overflow-auto"
+              style={{ backgroundImage: "radial-gradient(circle, hsl(var(--border)) 1px, transparent 1px)", backgroundSize: "24px 24px" }}
+            >
+              {cards.length === 0 && (
+                <p className="absolute inset-0 flex items-center justify-center text-sm text-muted-foreground">
+                  Add links above to start your moodboard
+                </p>
+              )}
 
-          {cards.map((card) => (
-            <DraggableCard
-              key={card.id}
-              card={card}
-              onMouseDown={(e) => onMouseDown(e, card)}
-              onResizeStart={(e) => onResizeStart(e, card)}
-              onRemove={() => handleRemove(card.id)}
-              onToggleCaption={() => handleToggleCaption(card.id, card.show_caption)}
-              onUpdate={(fields) => handleUpdateField(card.link_id, fields)}
-            />
-          ))}
+              {cards.map((card) => (
+                <DraggableCard
+                  key={card.id}
+                  card={card}
+                  onMouseDown={(e) => onMouseDown(e, card)}
+                  onResizeStart={(e) => onResizeStart(e, card)}
+                  onRemove={() => handleRemove(card.id)}
+                  onToggleCaption={() => handleToggleCaption(card.id, card.show_caption)}
+                  onUpdate={(fields) => handleUpdateField(card.link_id, fields)}
+                />
+              ))}
+            </div>
+          )}
         </div>
-      )}
+        {projectId && (
+          <ProjectProductPanel
+            projectId={projectId}
+            currentRoomId={roomId}
+            onProductAdded={fetchCards}
+          />
+        )}
+      </div>
     </div>
   );
 };
