@@ -11,7 +11,8 @@ import {
   RefreshCw,
 } from "lucide-react";
 
-const ADMIN_PASSWORD = "VWfurnish";
+// ADMIN_PASSWORD is NOT stored here — it lives in Supabase Vault as a secret
+// and is verified server-side by the admin-stats edge function only.
 const SESSION_KEY = "furnish_admin_auth";
 const POLL_MS = 30_000; // background refresh every 30 s
 
@@ -40,62 +41,74 @@ const Admin = () => {
 
   const [users, setUsers] = useState<UserStat[]>([]);
   const [projects, setProjects] = useState<ProjectStat[]>([]);
-  const [loading, setLoading] = useState(false);   // first load spinner
-  const [refreshing, setRefreshing] = useState(false); // background / manual
+  const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [expandedUser, setExpandedUser] = useState<string | null>(null);
 
+  // The verified password is kept only in JS heap memory — never written to
+  // the DOM, localStorage, or sessionStorage. Polling uses it for re-fetches.
+  const passwordRef = useRef<string>("");
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  /* ── Password form ─────────────────────────────────────────────────── */
-  const handlePasswordSubmit = (e: React.FormEvent) => {
+  /* ── Helpers ────────────────────────────────────────────────────────── */
+  const normaliseUsers = (rows: UserStat[]) =>
+    rows.map((u) => ({
+      ...u,
+      project_count: Number(u.project_count),
+      product_count: Number(u.product_count),
+    }));
+
+  const normaliseProjects = (rows: ProjectStat[]) =>
+    rows.map((p) => ({ ...p, product_count: Number(p.product_count) }));
+
+  /* ── Password form ──────────────────────────────────────────────────── */
+  const handlePasswordSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (password === ADMIN_PASSWORD) {
-      sessionStorage.setItem(SESSION_KEY, "true");
-      setAuthenticated(true);
-      setPasswordError(false);
-    } else {
+    setLoading(true);
+    setPasswordError(false);
+
+    // Password is sent to the edge function and verified server-side.
+    // The function returns { users, projects } on success or status 401 on failure.
+    const { data, error } = await supabase.functions.invoke("admin-stats", {
+      body: { password },
+    });
+
+    if (error || data?.error) {
       setPasswordError(true);
       setPassword("");
+      setLoading(false);
+      return;
     }
+
+    // Correct password — store in ref (heap only) and populate dashboard.
+    passwordRef.current = password;
+    sessionStorage.setItem(SESSION_KEY, "true");
+    setAuthenticated(true);
+    setPasswordError(false);
+    if (data.users) setUsers(normaliseUsers(data.users as UserStat[]));
+    if (data.projects) setProjects(normaliseProjects(data.projects as ProjectStat[]));
+    setLastUpdated(new Date());
+    setLoading(false);
   };
 
-  /* ── Data fetching ─────────────────────────────────────────────────── */
+  /* ── Data re-fetch (polling + manual refresh) ───────────────────────── */
   const fetchData = async (silent = false) => {
+    if (!passwordRef.current) return; // page reloaded — ref is empty, skip
     if (silent) setRefreshing(true);
     else setLoading(true);
     setFetchError(null);
 
-    const [
-      { data: userStats, error: userErr },
-      { data: projectStats, error: projErr },
-    ] = await Promise.all([
-      supabase.rpc("get_admin_stats"),
-      supabase.rpc("get_admin_projects"),
-    ]);
+    const { data, error } = await supabase.functions.invoke("admin-stats", {
+      body: { password: passwordRef.current },
+    });
 
-    const err = userErr ?? projErr;
-    if (err) {
-      setFetchError(err.message);
+    if (error || data?.error) {
+      setFetchError((error as { message?: string } | null)?.message ?? data?.error ?? "Unknown error");
     } else {
-      // BigInt counts come back from PostgREST as numbers; Number() is a safe
-      // coercion guard in case a future Postgres/PostgREST version returns strings.
-      if (userStats)
-        setUsers(
-          (userStats as UserStat[]).map((u) => ({
-            ...u,
-            project_count: Number(u.project_count),
-            product_count: Number(u.product_count),
-          }))
-        );
-      if (projectStats)
-        setProjects(
-          (projectStats as ProjectStat[]).map((p) => ({
-            ...p,
-            product_count: Number(p.product_count),
-          }))
-        );
+      if (data.users) setUsers(normaliseUsers(data.users as UserStat[]));
+      if (data.projects) setProjects(normaliseProjects(data.projects as ProjectStat[]));
       setLastUpdated(new Date());
     }
 
@@ -103,17 +116,27 @@ const Admin = () => {
     else setLoading(false);
   };
 
-  /* ── On auth: initial fetch + 30-s polling ─────────────────────────── */
+  /* ── Start polling once authenticated with a live passwordRef ───────── */
   useEffect(() => {
-    if (!authenticated) return;
-    fetchData();
+    if (!authenticated || !passwordRef.current) return;
     pollRef.current = setInterval(() => fetchData(true), POLL_MS);
     return () => {
       if (pollRef.current) clearInterval(pollRef.current);
     };
   }, [authenticated]);
 
-  /* ── Password gate ─────────────────────────────────────────────────── */
+  /* ── Sign out ───────────────────────────────────────────────────────── */
+  const handleSignOut = () => {
+    sessionStorage.removeItem(SESSION_KEY);
+    passwordRef.current = "";
+    if (pollRef.current) clearInterval(pollRef.current);
+    setAuthenticated(false);
+    setPassword("");
+    setUsers([]);
+    setProjects([]);
+  };
+
+  /* ── Password gate ──────────────────────────────────────────────────── */
   if (!authenticated) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -148,8 +171,10 @@ const Admin = () => {
             )}
             <button
               type="submit"
-              className="w-full bg-primary text-primary-foreground px-4 py-2.5 rounded-lg text-sm font-medium hover:opacity-90 transition-opacity"
+              disabled={loading}
+              className="w-full bg-primary text-primary-foreground px-4 py-2.5 rounded-lg text-sm font-medium hover:opacity-90 transition-opacity disabled:opacity-50 flex items-center justify-center gap-2"
             >
+              {loading && <Loader2 className="w-4 h-4 animate-spin" />}
               Continue
             </button>
           </form>
@@ -158,7 +183,7 @@ const Admin = () => {
     );
   }
 
-  /* ── Dashboard ─────────────────────────────────────────────────────── */
+  /* ── Dashboard ──────────────────────────────────────────────────────── */
   const totalProjects = users.reduce((s, u) => s + u.project_count, 0);
   const totalProducts = users.reduce((s, u) => s + u.product_count, 0);
 
@@ -184,11 +209,7 @@ const Admin = () => {
               <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? "animate-spin" : ""}`} />
             </button>
             <button
-              onClick={() => {
-                sessionStorage.removeItem(SESSION_KEY);
-                setAuthenticated(false);
-                setPassword("");
-              }}
+              onClick={handleSignOut}
               className="text-xs text-muted-foreground hover:text-foreground transition-colors"
             >
               Sign out
@@ -198,13 +219,13 @@ const Admin = () => {
       </header>
 
       <main className="max-w-5xl mx-auto px-6 py-8 space-y-8">
-        {/* ── Loading ──────────────────────────────────────────────────── */}
+        {/* ── Loading ────────────────────────────────────────────────── */}
         {loading ? (
           <div className="flex items-center justify-center py-20">
             <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
           </div>
         ) : fetchError ? (
-          /* ── Error ─────────────────────────────────────────────────── */
+          /* ── Error ───────────────────────────────────────────────── */
           <div className="bg-destructive/10 border border-destructive/30 rounded-lg px-5 py-4 text-sm text-destructive space-y-2">
             <p className="font-medium">Failed to load admin data</p>
             <p className="text-xs opacity-80">{fetchError}</p>
@@ -217,7 +238,7 @@ const Admin = () => {
           </div>
         ) : (
           <>
-            {/* ── Summary cards ──────────────────────────────────────── */}
+            {/* ── Summary cards ────────────────────────────────────── */}
             <div className="grid grid-cols-3 gap-4">
               <div className="bg-card border border-border rounded-lg px-5 py-4">
                 <div className="flex items-center gap-2 text-muted-foreground mb-2">
@@ -242,7 +263,7 @@ const Admin = () => {
               </div>
             </div>
 
-            {/* ── Users table ────────────────────────────────────────── */}
+            {/* ── Users table ──────────────────────────────────────── */}
             <div>
               <h2 className="text-sm font-medium text-foreground mb-3">
                 All accounts{" "}
@@ -286,10 +307,9 @@ const Admin = () => {
                         const expanded = expandedUser === u.user_id;
                         const hasProjects = userProjects.length > 0;
 
-                        // React.Fragment is required here (not <>) to attach the key
                         return (
                           <React.Fragment key={u.user_id}>
-                            {/* ── User row ───────────────────────────── */}
+                            {/* ── User row ─────────────────────────── */}
                             <tr
                               className={`border-b border-border transition-colors ${
                                 hasProjects
@@ -326,7 +346,7 @@ const Admin = () => {
                               </td>
                             </tr>
 
-                            {/* ── Per-project sub-rows ───────────────── */}
+                            {/* ── Per-project sub-rows ─────────────── */}
                             {expanded &&
                               userProjects.map((proj) => (
                                 <tr
