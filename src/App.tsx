@@ -11,6 +11,7 @@ import RoomView from "./pages/RoomView";
 import PresentationView from "./pages/PresentationView";
 import SharedPresentationView from "./pages/SharedPresentationView";
 import NotFound from "./pages/NotFound";
+import Admin from "./pages/Admin";
 import { Loader2 } from "lucide-react";
 
 const queryClient = new QueryClient();
@@ -42,6 +43,7 @@ const App = () => (
           <Route path="/projects/:projectId/rooms/:roomId" element={<ProtectedRoute><RoomView /></ProtectedRoute>} />
           <Route path="/projects/:projectId/present" element={<ProtectedRoute><PresentationView /></ProtectedRoute>} />
           <Route path="/shared/:token" element={<SharedPresentationView />} />
+          <Route path="/admin" element={<Admin />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
