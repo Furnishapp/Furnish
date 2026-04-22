@@ -171,7 +171,25 @@ const ProjectProductPanel = ({ projectId, currentRoomId, onProductAdded }: Proje
 
   const panelContent = (
     <div className="flex flex-col h-full">
-      <div className="px-4 py-3 border-b border-border">
+      <div className="px-4 py-3 border-b border-border space-y-2">
+        <form onSubmit={handleQuickAdd} className="flex gap-1.5">
+          <input
+            type="url"
+            value={quickUrl}
+            onChange={(e) => setQuickUrl(e.target.value)}
+            placeholder="Paste URL to add product…"
+            className="flex-1 min-w-0 bg-secondary text-foreground placeholder:text-muted-foreground px-2.5 py-1.5 rounded-lg text-xs outline-none focus:ring-2 focus:ring-ring/20"
+            required
+          />
+          <button
+            type="submit"
+            disabled={quickAdding}
+            className="shrink-0 bg-primary text-primary-foreground px-2.5 py-1.5 rounded-lg text-xs font-medium hover:opacity-90 disabled:opacity-50 flex items-center gap-1"
+            title={currentRoomId ? "Add product (also placed on this room)" : "Add product to project"}
+          >
+            {quickAdding ? <Loader2 className="w-3 h-3 animate-spin" /> : <Plus className="w-3 h-3" />}
+          </button>
+        </form>
         <div className="relative">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
           <input
