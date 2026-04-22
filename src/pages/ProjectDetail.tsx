@@ -81,9 +81,6 @@ const ProjectDetail = () => {
           {projectId && activeTab === "budget" && <BudgetMode projectId={projectId} />}
           {projectId && activeTab === "slides" && <SlidesMode projectId={projectId} />}
         </div>
-        {projectId && activeTab !== "slides" && (
-          <ProjectProductPanel projectId={projectId} />
-        )}
       </div>
     </div>
   );
