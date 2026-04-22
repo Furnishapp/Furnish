@@ -124,6 +124,47 @@ const ProjectProductPanel = ({ projectId, currentRoomId, onProductAdded }: Proje
     onProductAdded?.();
   };
 
+  const handleQuickAdd = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!quickUrl.trim() || !user) return;
+    setQuickAdding(true);
+    try {
+      const { data: preview } = await supabase.functions.invoke("preview", {
+        body: { url: quickUrl.trim() },
+      });
+      const { data: newLink } = await supabase
+        .from("links")
+        .insert({
+          user_id: user.id,
+          url: quickUrl.trim(),
+          title: preview?.title || "",
+          description: preview?.description || "",
+          image: preview?.image || "",
+        })
+        .select()
+        .single();
+
+      // If on a room page, also place it on the current room board
+      if (newLink && currentRoomId) {
+        const px = 40 + Math.random() * 400;
+        const py = 40 + Math.random() * 300;
+        await supabase.from("room_links").insert({
+          room_id: currentRoomId,
+          link_id: newLink.id,
+          position_x: px,
+          position_y: py,
+        });
+      }
+      setQuickUrl("");
+      await fetchProducts();
+      onProductAdded?.();
+    } catch (err) {
+      console.error("Quick add failed:", err);
+    } finally {
+      setQuickAdding(false);
+    }
+  };
+
   const filtered = products.filter((p) =>
     !search || p.title.toLowerCase().includes(search.toLowerCase()) || p.url.toLowerCase().includes(search.toLowerCase())
   );
