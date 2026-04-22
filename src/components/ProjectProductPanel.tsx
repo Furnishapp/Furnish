@@ -42,6 +42,8 @@ const ProjectProductPanel = ({ projectId, currentRoomId, onProductAdded }: Proje
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [addingToRoom, setAddingToRoom] = useState<string | null>(null);
+  const [quickUrl, setQuickUrl] = useState("");
+  const [quickAdding, setQuickAdding] = useState(false);
 
   const fetchProducts = useCallback(async () => {
     if (!user) return;
@@ -122,13 +124,72 @@ const ProjectProductPanel = ({ projectId, currentRoomId, onProductAdded }: Proje
     onProductAdded?.();
   };
 
+  const handleQuickAdd = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!quickUrl.trim() || !user) return;
+    setQuickAdding(true);
+    try {
+      const { data: preview } = await supabase.functions.invoke("preview", {
+        body: { url: quickUrl.trim() },
+      });
+      const { data: newLink } = await supabase
+        .from("links")
+        .insert({
+          user_id: user.id,
+          url: quickUrl.trim(),
+          title: preview?.title || "",
+          description: preview?.description || "",
+          image: preview?.image || "",
+        })
+        .select()
+        .single();
+
+      // If on a room page, also place it on the current room board
+      if (newLink && currentRoomId) {
+        const px = 40 + Math.random() * 400;
+        const py = 40 + Math.random() * 300;
+        await supabase.from("room_links").insert({
+          room_id: currentRoomId,
+          link_id: newLink.id,
+          position_x: px,
+          position_y: py,
+        });
+      }
+      setQuickUrl("");
+      await fetchProducts();
+      onProductAdded?.();
+    } catch (err) {
+      console.error("Quick add failed:", err);
+    } finally {
+      setQuickAdding(false);
+    }
+  };
+
   const filtered = products.filter((p) =>
     !search || p.title.toLowerCase().includes(search.toLowerCase()) || p.url.toLowerCase().includes(search.toLowerCase())
   );
 
   const panelContent = (
     <div className="flex flex-col h-full">
-      <div className="px-4 py-3 border-b border-border">
+      <div className="px-4 py-3 border-b border-border space-y-2">
+        <form onSubmit={handleQuickAdd} className="flex gap-1.5">
+          <input
+            type="url"
+            value={quickUrl}
+            onChange={(e) => setQuickUrl(e.target.value)}
+            placeholder="Paste URL to add product…"
+            className="flex-1 min-w-0 bg-secondary text-foreground placeholder:text-muted-foreground px-2.5 py-1.5 rounded-lg text-xs outline-none focus:ring-2 focus:ring-ring/20"
+            required
+          />
+          <button
+            type="submit"
+            disabled={quickAdding}
+            className="shrink-0 bg-primary text-primary-foreground px-2.5 py-1.5 rounded-lg text-xs font-medium hover:opacity-90 disabled:opacity-50 flex items-center gap-1"
+            title={currentRoomId ? "Add product (also placed on this room)" : "Add product to project"}
+          >
+            {quickAdding ? <Loader2 className="w-3 h-3 animate-spin" /> : <Plus className="w-3 h-3" />}
+          </button>
+        </form>
         <div className="relative">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
           <input
@@ -282,10 +343,10 @@ const ProductItem = ({ product, rooms, currentRoomId, addingToRoom, onAddToRoom 
         ))}
 
         {availableRooms.length > 0 && (
-          <div className="relative">
+          currentRoomId && availableRooms.some((r) => r.id === currentRoomId) ? (
             <button
-              onClick={() => setShowRoomPicker(!showRoomPicker)}
-              className="text-[10px] px-1.5 py-0.5 rounded-full bg-secondary text-muted-foreground hover:text-foreground flex items-center gap-0.5"
+              onClick={() => onAddToRoom(product.id, currentRoomId)}
+              className="text-[10px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary hover:bg-primary/20 flex items-center gap-0.5"
               disabled={addingToRoom === product.id}
             >
               {addingToRoom === product.id ? (
@@ -293,23 +354,38 @@ const ProductItem = ({ product, rooms, currentRoomId, addingToRoom, onAddToRoom 
               ) : (
                 <Plus className="w-2.5 h-2.5" />
               )}
-              Add to room
+              Add here
             </button>
+          ) : (
+            <div className="relative">
+              <button
+                onClick={() => setShowRoomPicker(!showRoomPicker)}
+                className="text-[10px] px-1.5 py-0.5 rounded-full bg-secondary text-muted-foreground hover:text-foreground flex items-center gap-0.5"
+                disabled={addingToRoom === product.id}
+              >
+                {addingToRoom === product.id ? (
+                  <Loader2 className="w-2.5 h-2.5 animate-spin" />
+                ) : (
+                  <Plus className="w-2.5 h-2.5" />
+                )}
+                Add to room
+              </button>
 
-            {showRoomPicker && (
-              <div className="absolute top-full left-0 mt-1 z-50 bg-popover border border-border rounded-lg shadow-lg py-1 min-w-[120px]">
-                {availableRooms.map((room) => (
-                  <button
-                    key={room.id}
-                    onClick={() => { onAddToRoom(product.id, room.id); setShowRoomPicker(false); }}
-                    className="w-full text-left px-3 py-1.5 text-xs text-popover-foreground hover:bg-accent transition-colors"
-                  >
-                    {room.name}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
+              {showRoomPicker && (
+                <div className="absolute top-full left-0 mt-1 z-50 bg-popover border border-border rounded-lg shadow-lg py-1 min-w-[120px]">
+                  {availableRooms.map((room) => (
+                    <button
+                      key={room.id}
+                      onClick={() => { onAddToRoom(product.id, room.id); setShowRoomPicker(false); }}
+                      className="w-full text-left px-3 py-1.5 text-xs text-popover-foreground hover:bg-accent transition-colors"
+                    >
+                      {room.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )
         )}
       </div>
     </div>
