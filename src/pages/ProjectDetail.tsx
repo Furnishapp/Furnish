@@ -7,7 +7,6 @@ import PlanMode from "@/components/PlanMode";
 import BudgetMode from "@/components/BudgetMode";
 import SlidesMode from "@/components/SlidesMode";
 import BriefMode from "@/components/BriefMode";
-import ProjectProductPanel from "@/components/ProjectProductPanel";
 
 type Tab = "brief" | "plan" | "budget" | "slides";
 
