@@ -343,10 +343,10 @@ const ProductItem = ({ product, rooms, currentRoomId, addingToRoom, onAddToRoom 
         ))}
 
         {availableRooms.length > 0 && (
-          <div className="relative">
+          currentRoomId && availableRooms.some((r) => r.id === currentRoomId) ? (
             <button
-              onClick={() => setShowRoomPicker(!showRoomPicker)}
-              className="text-[10px] px-1.5 py-0.5 rounded-full bg-secondary text-muted-foreground hover:text-foreground flex items-center gap-0.5"
+              onClick={() => onAddToRoom(product.id, currentRoomId)}
+              className="text-[10px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary hover:bg-primary/20 flex items-center gap-0.5"
               disabled={addingToRoom === product.id}
             >
               {addingToRoom === product.id ? (
@@ -354,23 +354,38 @@ const ProductItem = ({ product, rooms, currentRoomId, addingToRoom, onAddToRoom 
               ) : (
                 <Plus className="w-2.5 h-2.5" />
               )}
-              Add to room
+              Add here
             </button>
+          ) : (
+            <div className="relative">
+              <button
+                onClick={() => setShowRoomPicker(!showRoomPicker)}
+                className="text-[10px] px-1.5 py-0.5 rounded-full bg-secondary text-muted-foreground hover:text-foreground flex items-center gap-0.5"
+                disabled={addingToRoom === product.id}
+              >
+                {addingToRoom === product.id ? (
+                  <Loader2 className="w-2.5 h-2.5 animate-spin" />
+                ) : (
+                  <Plus className="w-2.5 h-2.5" />
+                )}
+                Add to room
+              </button>
 
-            {showRoomPicker && (
-              <div className="absolute top-full left-0 mt-1 z-50 bg-popover border border-border rounded-lg shadow-lg py-1 min-w-[120px]">
-                {availableRooms.map((room) => (
-                  <button
-                    key={room.id}
-                    onClick={() => { onAddToRoom(product.id, room.id); setShowRoomPicker(false); }}
-                    className="w-full text-left px-3 py-1.5 text-xs text-popover-foreground hover:bg-accent transition-colors"
-                  >
-                    {room.name}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
+              {showRoomPicker && (
+                <div className="absolute top-full left-0 mt-1 z-50 bg-popover border border-border rounded-lg shadow-lg py-1 min-w-[120px]">
+                  {availableRooms.map((room) => (
+                    <button
+                      key={room.id}
+                      onClick={() => { onAddToRoom(product.id, room.id); setShowRoomPicker(false); }}
+                      className="w-full text-left px-3 py-1.5 text-xs text-popover-foreground hover:bg-accent transition-colors"
+                    >
+                      {room.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )
         )}
       </div>
     </div>
