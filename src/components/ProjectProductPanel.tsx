@@ -42,6 +42,8 @@ const ProjectProductPanel = ({ projectId, currentRoomId, onProductAdded }: Proje
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [addingToRoom, setAddingToRoom] = useState<string | null>(null);
+  const [quickUrl, setQuickUrl] = useState("");
+  const [quickAdding, setQuickAdding] = useState(false);
 
   const fetchProducts = useCallback(async () => {
     if (!user) return;
