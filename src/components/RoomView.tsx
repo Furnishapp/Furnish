@@ -1,7 +1,8 @@
+"use client";
+
 import { useEffect, useState, useRef, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/hooks/useAuth";
-import { useParams, useNavigate } from "react-router-dom";
 import { Plus, Loader2, ArrowLeft, ExternalLink, Pencil, Trash2, DollarSign, LayoutGrid, Heart, Eye, EyeOff } from "lucide-react";
 import RoomBudgetView from "@/components/RoomBudgetView";
 import MoodMode from "@/components/MoodMode";
@@ -27,10 +28,8 @@ const CARD_MIN_H = 100;
 
 type RoomTab = "mood" | "product" | "budget";
 
-const RoomView = () => {
-  const { user } = useAuth();
-  const { projectId, roomId } = useParams<{ projectId: string; roomId: string }>();
-  const navigate = useNavigate();
+const RoomView = ({ projectId, roomId }: { projectId: string; roomId: string }) => {
+  const router = useRouter();
   const [roomName, setRoomName] = useState("");
   const [cards, setCards] = useState<RoomLink[]>([]);
   const [loading, setLoading] = useState(true);
@@ -87,10 +86,13 @@ const RoomView = () => {
 
   const handleAddLink = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!url.trim() || !user || !roomId) return;
+    if (!url.trim() || !roomId) return;
     setFetching(true);
 
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
       const { data: preview, error } = await supabase.functions.invoke("preview", {
         body: { url: url.trim() },
       });
@@ -138,7 +140,6 @@ const RoomView = () => {
     setCards((prev) => prev.map((c) => (c.id === rlId ? { ...c, show_caption: next } : c)));
   };
 
-  // Drag handlers
   const onMouseDown = (e: React.MouseEvent, card: RoomLink) => {
     e.preventDefault();
     dragRef.current = {
@@ -148,7 +149,6 @@ const RoomView = () => {
     };
   };
 
-  // Resize handlers
   const onResizeStart = (e: React.MouseEvent, card: RoomLink) => {
     e.preventDefault();
     e.stopPropagation();
@@ -239,13 +239,12 @@ const RoomView = () => {
     <div className="h-screen flex flex-col bg-background overflow-hidden">
       <header className="shrink-0 bg-background/80 backdrop-blur-sm border-b border-border z-10">
         <div className="px-6 py-3 flex items-center gap-3">
-          <button onClick={() => navigate(`/projects/${projectId}`)} className="text-muted-foreground hover:text-foreground">
+          <button onClick={() => router.push(`/projects/${projectId}`)} className="text-muted-foreground hover:text-foreground">
             <ArrowLeft className="w-4 h-4" />
           </button>
           <h1 className="text-sm font-semibold text-foreground">{roomName}</h1>
           <span className="text-xs text-muted-foreground">{cards.length} item{cards.length !== 1 ? "s" : ""}</span>
 
-          {/* Tabs */}
           <div className="ml-4 flex items-center gap-1 bg-secondary rounded-lg p-0.5">
             {tabItems.map(({ key, label, icon: Icon }) => (
               <button
@@ -316,7 +315,6 @@ const RoomView = () => {
   );
 };
 
-// ── Card Component ──────────────────────────────────────
 interface DraggableCardProps {
   card: RoomLink;
   onMouseDown: (e: React.MouseEvent) => void;
@@ -404,7 +402,6 @@ const DraggableCard = ({ card, onMouseDown, onResizeStart, onRemove, onToggleCap
         </div>
       )}
 
-      {/* Action buttons */}
       <div className="absolute top-2 right-2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity" onMouseDown={(e) => e.stopPropagation()}>
         <button
           onClick={onToggleCaption}
@@ -421,7 +418,6 @@ const DraggableCard = ({ card, onMouseDown, onResizeStart, onRemove, onToggleCap
         </button>
       </div>
 
-      {/* Resize handle */}
       <div
         className="absolute bottom-0 right-0 w-4 h-4 cursor-se-resize opacity-0 group-hover:opacity-100 transition-opacity"
         onMouseDown={onResizeStart}

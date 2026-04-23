@@ -1,72 +1,53 @@
-import { useEffect, useState } from "react";
+"use client";
+
+import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/hooks/useAuth";
 import { Plus, FolderOpen, Loader2, LogOut, Trash2 } from "lucide-react";
-import { useNavigate } from "react-router-dom";
 
-interface Project {
-  id: string;
-  name: string;
-  room_count: number;
-}
+interface Project { id: string; name: string; room_count: number; }
 
-const Projects = () => {
-  const { user } = useAuth();
-  const navigate = useNavigate();
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [loading, setLoading] = useState(true);
+export default function ProjectsClient({
+  initialProjects,
+  userId,
+}: {
+  initialProjects: Project[];
+  userId: string;
+}) {
+  const router = useRouter();
+  const [projects, setProjects] = useState<Project[]>(initialProjects);
   const [name, setName] = useState("");
   const [creating, setCreating] = useState(false);
 
-  const fetchProjects = async () => {
-    if (!user) return;
-    const { data: projectRows } = await supabase
-      .from("projects")
-      .select("id, name")
-      .order("created_at", { ascending: false });
-
-    if (!projectRows) { setLoading(false); return; }
-
-    // Get room counts
-    const { data: rooms } = await supabase
-      .from("rooms")
-      .select("project_id");
-
+  const refresh = async () => {
+    const [{ data: projectRows }, { data: rooms }] = await Promise.all([
+      supabase.from("projects").select("id, name").order("created_at", { ascending: false }),
+      supabase.from("rooms").select("project_id"),
+    ]);
     const counts: Record<string, number> = {};
     rooms?.forEach((r) => { counts[r.project_id] = (counts[r.project_id] || 0) + 1; });
-
-    setProjects(projectRows.map((p) => ({ ...p, room_count: counts[p.id] || 0 })));
-    setLoading(false);
+    setProjects((projectRows ?? []).map((p) => ({ ...p, room_count: counts[p.id] || 0 })));
   };
-
-  useEffect(() => { fetchProjects(); }, [user]);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim() || !user) return;
+    if (!name.trim()) return;
     setCreating(true);
-    await supabase.from("projects").insert({ name: name.trim(), user_id: user.id });
+    await supabase.from("projects").insert({ name: name.trim(), user_id: userId });
     setName("");
     setCreating(false);
-    fetchProjects();
+    refresh();
   };
 
   const handleDelete = async (id: string) => {
     await supabase.from("projects").delete().eq("id", id);
-    fetchProjects();
+    setProjects((p) => p.filter((pr) => pr.id !== id));
   };
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
+    router.push("/sign-in");
   };
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -99,21 +80,25 @@ const Projects = () => {
         </form>
 
         {projects.length === 0 ? (
-          <p className="text-center text-muted-foreground text-sm pt-20">Create your first project above</p>
+          <p className="text-center text-muted-foreground text-sm pt-20">
+            Create your first project above
+          </p>
         ) : (
           <div className="grid gap-3">
             {projects.map((p) => (
               <div
                 key={p.id}
                 className="bg-card border border-border rounded-lg px-5 py-4 flex items-center justify-between hover:shadow-sm transition-shadow cursor-pointer"
-                onClick={() => navigate(`/projects/${p.id}`)}
+                onClick={() => router.push(`/projects/${p.id}`)}
               >
                 <div className="flex items-center gap-3">
                   <FolderOpen className="w-4 h-4 text-muted-foreground" />
                   <span className="text-sm font-medium text-card-foreground">{p.name}</span>
                 </div>
                 <div className="flex items-center gap-3">
-                  <span className="text-xs text-muted-foreground">{p.room_count} room{p.room_count !== 1 ? "s" : ""}</span>
+                  <span className="text-xs text-muted-foreground">
+                    {p.room_count} room{p.room_count !== 1 ? "s" : ""}
+                  </span>
                   <button
                     onClick={(e) => { e.stopPropagation(); handleDelete(p.id); }}
                     className="text-muted-foreground hover:text-destructive transition-colors"
@@ -128,6 +113,4 @@ const Projects = () => {
       </main>
     </div>
   );
-};
-
-export default Projects;
+}

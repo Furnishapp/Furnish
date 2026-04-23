@@ -1,7 +1,8 @@
+"use client";
+
 import { useEffect, useState, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/hooks/useAuth";
-import { useNavigate } from "react-router-dom";
 import {
   Presentation, Loader2, Eye, EyeOff, GripVertical, Heart,
   LayoutGrid, DollarSign, FileText, Share2, Copy, Check,
@@ -59,8 +60,7 @@ const TYPE_ICON = { brief: FileText, mood: Heart, product: LayoutGrid, budget: D
 const TYPE_LABEL = { brief: "Brief", mood: "Mood", product: "Products", budget: "Budget" };
 
 const SlidesMode = ({ projectId }: SlidesModeProps) => {
-  const navigate = useNavigate();
-  const { user } = useAuth();
+  const router = useRouter();
   const [slides, setSlides] = useState<SlideData[]>([]);
   const [loading, setLoading] = useState(true);
   const [dragIdx, setDragIdx] = useState<number | null>(null);
@@ -204,10 +204,11 @@ const SlidesMode = ({ projectId }: SlidesModeProps) => {
   const startPresentation = () => {
     const visible = slides.filter((s) => !s.hidden);
     sessionStorage.setItem("presentation-slides", JSON.stringify(visible));
-    navigate(`/projects/${projectId}/present`);
+    router.push(`/projects/${projectId}/present`);
   };
 
   const sharePresentation = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
     setSharing(true);
     try {

@@ -1,6 +1,8 @@
+"use client";
+
 import { useEffect, useState, useRef, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { supabase } from "@/integrations/supabase/client";
-import { useNavigate } from "react-router-dom";
 import { Plus, Trash2, DoorOpen, Loader2 } from "lucide-react";
 
 interface Room {
@@ -19,7 +21,7 @@ const ROOM_W = 180;
 const ROOM_H = 100;
 
 const PlanMode = ({ projectId }: PlanModeProps) => {
-  const navigate = useNavigate();
+  const router = useRouter();
   const [rooms, setRooms] = useState<Room[]>([]);
   const [loading, setLoading] = useState(true);
   const [name, setName] = useState("");
@@ -173,7 +175,7 @@ const PlanMode = ({ projectId }: PlanModeProps) => {
               height: ROOM_H,
             }}
             onMouseDown={(e) => onMouseDown(e, room)}
-            onDoubleClick={() => navigate(`/projects/${projectId}/rooms/${room.id}`)}
+            onDoubleClick={() => router.push(`/projects/${projectId}/rooms/${room.id}`)}
           >
             <DoorOpen className="w-5 h-5 text-muted-foreground" />
             <span className="text-xs font-medium text-card-foreground">{room.name}</span>

@@ -1,5 +1,7 @@
+"use client";
+
 import { useEffect, useState, useRef, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+import { useRouter } from "next/navigation";
 import { Heart, DollarSign, ExternalLink, FileText, MapPin, Target, User, X } from "lucide-react";
 import type { SlideData } from "@/components/SlidesMode";
 
@@ -8,10 +10,11 @@ const SLIDE_H = 1080;
 
 interface PresentationViewProps {
   externalSlides?: SlideData[];
+  projectId?: string;
 }
 
 const PresentationView = ({ externalSlides }: PresentationViewProps) => {
-  const navigate = useNavigate();
+  const router = useRouter();
   const [slides, setSlides] = useState<SlideData[]>([]);
   const [current, setCurrent] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -48,15 +51,14 @@ const PresentationView = ({ externalSlides }: PresentationViewProps) => {
       } else if (e.key === "ArrowLeft") {
         setCurrent((prev) => Math.max(prev - 1, 0));
       } else if (e.key === "Escape") {
-        if (externalSlides) return; // no exit on shared view
-        navigate(-1);
+        if (externalSlides) return;
+        router.back();
       }
     };
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
-  }, [slides, navigate, externalSlides]);
+  }, [slides, router, externalSlides]);
 
-  // Show exit on mouse move, hide after 3s
   useEffect(() => {
     if (externalSlides) return;
     let timeout: ReturnType<typeof setTimeout>;
@@ -85,10 +87,9 @@ const PresentationView = ({ externalSlides }: PresentationViewProps) => {
       className="h-screen bg-[#111] overflow-hidden relative select-none"
       onClick={() => setCurrent((prev) => Math.min(prev + 1, slides.length - 1))}
     >
-      {/* Exit button */}
       {!externalSlides && (
         <button
-          onClick={(e) => { e.stopPropagation(); navigate(-1); }}
+          onClick={(e) => { e.stopPropagation(); router.back(); }}
           className={`absolute top-4 left-4 z-20 bg-white/10 hover:bg-white/20 text-white rounded-full p-2 transition-opacity ${
             showExit ? "opacity-100" : "opacity-0"
           }`}
@@ -118,12 +119,10 @@ const PresentationView = ({ externalSlides }: PresentationViewProps) => {
         </div>
       </div>
 
-      {/* Counter */}
       <div className="absolute bottom-4 right-6 text-white/20 text-xs z-10">
         {current + 1} / {slides.length}
       </div>
 
-      {/* Nav dots */}
       <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-1.5 z-10">
         {slides.map((_, i) => (
           <button
@@ -139,7 +138,6 @@ const PresentationView = ({ externalSlides }: PresentationViewProps) => {
   );
 };
 
-// ── Brief Slide ────────────────────────────────────────
 const BriefSlide = ({ slide }: { slide: SlideData }) => {
   const brief = slide.brief;
   return (
@@ -187,7 +185,6 @@ const BriefSlide = ({ slide }: { slide: SlideData }) => {
   );
 };
 
-// ── Mood Slide ──────────────────────────────────────────
 const MoodSlide = ({ slide }: { slide: SlideData }) => {
   const { room } = slide;
   const hasImages = room.mood_images.length > 0;
@@ -227,7 +224,6 @@ const MoodSlide = ({ slide }: { slide: SlideData }) => {
   );
 };
 
-// ── Product Slide ───────────────────────────────────────
 const ProductSlide = ({ slide }: { slide: SlideData }) => {
   const { room } = slide;
   const items = room.items;
@@ -302,7 +298,6 @@ const ProductSlide = ({ slide }: { slide: SlideData }) => {
   );
 };
 
-// ── Budget Slide ────────────────────────────────────────
 const BudgetSlide = ({ slide }: { slide: SlideData }) => {
   const { room } = slide;
   const items = room.items.filter((i) => i.url);
