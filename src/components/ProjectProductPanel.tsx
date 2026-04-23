@@ -1,6 +1,7 @@
+"use client";
+
 import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/hooks/useAuth";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { ExternalLink, Plus, Loader2, Package, ChevronUp, X, Search } from "lucide-react";
 import {
@@ -34,7 +35,6 @@ interface ProjectProductPanelProps {
 }
 
 const ProjectProductPanel = ({ projectId, currentRoomId, onProductAdded }: ProjectProductPanelProps) => {
-  const { user } = useAuth();
   const isMobile = useIsMobile();
   const [products, setProducts] = useState<ProjectLink[]>([]);
   const [rooms, setRooms] = useState<Room[]>([]);
@@ -46,8 +46,6 @@ const ProjectProductPanel = ({ projectId, currentRoomId, onProductAdded }: Proje
   const [quickAdding, setQuickAdding] = useState(false);
 
   const fetchProducts = useCallback(async () => {
-    if (!user) return;
-
     const { data: projectRooms } = await supabase
       .from("rooms")
       .select("id, name")
@@ -105,7 +103,7 @@ const ProjectProductPanel = ({ projectId, currentRoomId, onProductAdded }: Proje
 
     setProducts(Object.values(linkMap));
     setLoading(false);
-  }, [projectId, user]);
+  }, [projectId]);
 
   useEffect(() => { fetchProducts(); }, [fetchProducts]);
 
@@ -126,9 +124,11 @@ const ProjectProductPanel = ({ projectId, currentRoomId, onProductAdded }: Proje
 
   const handleQuickAdd = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!quickUrl.trim() || !user) return;
+    if (!quickUrl.trim()) return;
     setQuickAdding(true);
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
       const { data: preview } = await supabase.functions.invoke("preview", {
         body: { url: quickUrl.trim() },
       });

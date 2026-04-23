@@ -1,3 +1,5 @@
+"use client";
+
 import React, { useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -33,9 +35,7 @@ type ProjectStat = {
 };
 
 const Admin = () => {
-  const [authenticated, setAuthenticated] = useState(
-    () => sessionStorage.getItem(SESSION_KEY) === "true"
-  );
+  const [authenticated, setAuthenticated] = useState(false);
   const [password, setPassword] = useState("");
   const [passwordError, setPasswordError] = useState(false);
 
@@ -51,6 +51,11 @@ const Admin = () => {
   // the DOM, localStorage, or sessionStorage. Polling uses it for re-fetches.
   const passwordRef = useRef<string>("");
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Restore session flag from sessionStorage after mount (SSR-safe).
+  useEffect(() => {
+    if (sessionStorage.getItem(SESSION_KEY) === "true") setAuthenticated(true);
+  }, []);
 
   /* ── Helpers ────────────────────────────────────────────────────────── */
   const normaliseUsers = (rows: UserStat[]) =>
