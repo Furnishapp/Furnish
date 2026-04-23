@@ -2,16 +2,16 @@
 
 import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase } from "@/lib/supabase/client";
 import { ArrowLeft, Loader2, Map, DollarSign, Presentation, FileText } from "lucide-react";
 import { useUIStore } from "@/store";
 import dynamic from "next/dynamic";
 
 // Heavy canvas components loaded client-side only
-const PlanMode = dynamic(() => import("@/components/PlanMode"), { ssr: false });
-const BudgetMode = dynamic(() => import("@/components/BudgetMode"), { ssr: false });
-const SlidesMode = dynamic(() => import("@/components/SlidesMode"), { ssr: false });
-const BriefMode = dynamic(() => import("@/components/BriefMode"), { ssr: false });
+const PlanMode = dynamic(() => import("@/components/rooms/PlanMode"), { ssr: false });
+const BudgetMode = dynamic(() => import("@/components/products/BudgetMode"), { ssr: false });
+const SlidesMode = dynamic(() => import("@/components/slides/SlidesMode"), { ssr: false });
+const BriefMode = dynamic(() => import("@/components/brief/BriefMode"), { ssr: false });
 
 type Tab = "brief" | "plan" | "budget" | "slides";
 

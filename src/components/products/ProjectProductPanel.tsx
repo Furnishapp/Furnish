@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase } from "@/lib/supabase/client";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { ExternalLink, Plus, Loader2, Package, ChevronUp, X, Search } from "lucide-react";
 import {

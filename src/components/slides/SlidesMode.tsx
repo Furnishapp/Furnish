@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase } from "@/lib/supabase/client";
 import {
   Presentation, Loader2, Eye, EyeOff, GripVertical, Heart,
   LayoutGrid, DollarSign, FileText, Share2, Copy, Check,

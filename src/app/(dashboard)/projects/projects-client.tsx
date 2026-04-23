@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase } from "@/lib/supabase/client";
 import { Plus, FolderOpen, Loader2, LogOut, Trash2 } from "lucide-react";
 
 interface Project { id: string; name: string; room_count: number; }
