@@ -84,10 +84,14 @@ export default function ProjectDetailPage() {
         </div>
       </header>
 
-      {activeTab === "brief" && <BriefMode projectId={projectId} />}
-      {activeTab === "plan" && <PlanMode projectId={projectId} />}
-      {activeTab === "budget" && <BudgetMode projectId={projectId} />}
-      {activeTab === "slides" && <SlidesMode projectId={projectId} />}
+      <div className="flex-1 flex min-h-0 overflow-hidden">
+        <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+          {projectId && activeTab === "brief" && <BriefMode projectId={projectId} />}
+          {projectId && activeTab === "plan" && <PlanMode projectId={projectId} />}
+          {projectId && activeTab === "budget" && <BudgetMode projectId={projectId} />}
+          {projectId && activeTab === "slides" && <SlidesMode projectId={projectId} />}
+        </div>
+      </div>
     </div>
   );
 }
