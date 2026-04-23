@@ -4,7 +4,7 @@ import dynamic from "next/dynamic";
 import { useParams } from "next/navigation";
 import { Loader2 } from "lucide-react";
 
-const PresentationView = dynamic(() => import("@/components/PresentationView"), {
+const PresentationView = dynamic(() => import("@/components/slides/PresentationView"), {
   ssr: false,
   loading: () => (
     <div className="min-h-screen bg-black flex items-center justify-center">

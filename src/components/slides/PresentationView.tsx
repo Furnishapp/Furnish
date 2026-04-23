@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Heart, DollarSign, ExternalLink, FileText, MapPin, Target, User, X } from "lucide-react";
-import type { SlideData } from "@/components/SlidesMode";
+import type { SlideData } from "@/components/slides/SlidesMode";
 
 const SLIDE_W = 1920;
 const SLIDE_H = 1080;

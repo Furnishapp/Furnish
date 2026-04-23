@@ -3,7 +3,7 @@
 import dynamic from "next/dynamic";
 import { Loader2 } from "lucide-react";
 
-const RoomView = dynamic(() => import("@/components/RoomView"), {
+const RoomView = dynamic(() => import("@/components/rooms/RoomView"), {
   ssr: false,
   loading: () => (
     <div className="min-h-screen bg-background flex items-center justify-center">

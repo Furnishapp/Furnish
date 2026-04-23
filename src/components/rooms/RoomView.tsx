@@ -2,11 +2,11 @@
 
 import { useEffect, useState, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase } from "@/lib/supabase/client";
 import { Plus, Loader2, ArrowLeft, ExternalLink, Pencil, Trash2, DollarSign, LayoutGrid, Heart, Eye, EyeOff } from "lucide-react";
-import RoomBudgetView from "@/components/RoomBudgetView";
-import MoodMode from "@/components/MoodMode";
-import ProjectProductPanel from "@/components/ProjectProductPanel";
+import RoomBudgetView from "@/components/rooms/RoomBudgetView";
+import MoodMode from "@/components/rooms/MoodMode";
+import ProjectProductPanel from "@/components/products/ProjectProductPanel";
 
 interface RoomLink {
   id: string;
