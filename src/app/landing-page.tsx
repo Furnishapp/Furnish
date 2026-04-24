@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { motion } from "framer-motion";
+import { motion, type Variants } from "framer-motion";
 import Link from "next/link";
 import {
   ArrowRight,
@@ -58,7 +58,7 @@ const steps = [
   },
 ];
 
-const fade = {
+const fade: Variants = {
   hidden: { opacity: 0, y: 20 },
   visible: (i: number) => ({
     opacity: 1,
@@ -66,7 +66,7 @@ const fade = {
     transition: {
       delay: i * 0.07,
       duration: 0.55,
-      ease: [0.22, 1, 0.36, 1],
+      ease: [0.22, 1, 0.36, 1] as [number, number, number, number],
     },
   }),
 };
