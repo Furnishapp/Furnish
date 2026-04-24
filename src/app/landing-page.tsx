@@ -366,7 +366,7 @@ export default function LandingPage() {
               </em>
             </h2>
             <p className="mt-4 text-stone-500 max-w-[34ch] mx-auto leading-relaxed">
-              Join designers who've simplified how they work — from first brief
+              Join designers who&apos;ve simplified how they work — from first brief
               to final sign-off.
             </p>
             <div className="mt-9 flex flex-col sm:flex-row items-center justify-center gap-3">
