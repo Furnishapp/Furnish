@@ -1,15 +1,18 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 import { Loader2 } from "lucide-react";
 
-export default function SignInPage() {
+function SignInForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [isSignUp, setIsSignUp] = useState(false);
+  const [isSignUp, setIsSignUp] = useState(
+    searchParams.get("mode") === "signup"
+  );
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
@@ -25,7 +28,10 @@ export default function SignInPage() {
       if (error) setError(error.message);
       else setMessage("Check your email to confirm your account.");
     } else {
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
       if (error) setError(error.message);
       else router.push("/projects");
     }
@@ -74,12 +80,30 @@ export default function SignInPage() {
       <p className="text-center text-xs text-muted-foreground">
         {isSignUp ? "Already have an account?" : "Don't have an account?"}{" "}
         <button
-          onClick={() => { setIsSignUp(!isSignUp); setError(""); setMessage(""); }}
+          onClick={() => {
+            setIsSignUp(!isSignUp);
+            setError("");
+            setMessage("");
+          }}
           className="text-foreground underline"
         >
           {isSignUp ? "Sign In" : "Sign Up"}
         </button>
       </p>
     </div>
+  );
+}
+
+export default function SignInPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="w-full max-w-sm flex justify-center">
+          <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+        </div>
+      }
+    >
+      <SignInForm />
+    </Suspense>
   );
 }
