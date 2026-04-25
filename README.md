@@ -4,7 +4,7 @@ End-to-end project management for interior designers — from client brief to fi
 
 ## Live URL
 
-> Add your Vercel deployment URL here (e.g. `https://furnish.vercel.app`)
+https://v0-furnish.vercel.app/
 
 ## Tech Stack
 
