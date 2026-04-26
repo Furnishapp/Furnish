@@ -1,12 +1,10 @@
 import { create } from "zustand";
 
+type Tab = "people" | "plan" | "budget" | "slides";
+
 type UIState = {
-  // Per-project active tab persisted in memory across navigation
-  projectTabs: Record<string, "brief" | "plan" | "budget" | "slides">;
-  setProjectTab: (
-    projectId: string,
-    tab: "brief" | "plan" | "budget" | "slides"
-  ) => void;
+  projectTabs: Record<string, Tab>;
+  setProjectTab: (projectId: string, tab: Tab) => void;
 };
 
 export const useUIStore = create<UIState>((set) => ({
