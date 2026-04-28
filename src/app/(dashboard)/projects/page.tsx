@@ -7,7 +7,7 @@ export default async function ProjectsPage() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/sign-in");
 
-  // Resolve the user's personal org (created at signup via trigger)
+  // Resolve the user's personal org (created at signup via FUR-53 trigger)
   const { data: org } = await supabase
     .from("organizations")
     .select("id")
@@ -15,12 +15,14 @@ export default async function ProjectsPage() {
     .eq("type", "personal")
     .single();
 
-  // Guard: org is always present after the FUR-53 migration, but handle gracefully
   if (!org) redirect("/sign-in");
 
   // Initial data fetch on the server for instant render
   const [{ data: projectRows }, { data: rooms }] = await Promise.all([
-    supabase.from("projects").select("id, name").order("created_at", { ascending: false }),
+    supabase
+      .from("projects")
+      .select("id, name, status, cover_url, updated_at")
+      .order("updated_at", { ascending: false }),
     supabase.from("rooms").select("project_id"),
   ]);
 

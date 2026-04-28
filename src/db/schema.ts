@@ -50,6 +50,8 @@ export const projects = pgTable("projects", {
     .references(() => organizations.id, { onDelete: "cascade" }),
   userId:         uuid("user_id").notNull(), // legacy column, kept for admin queries
   name:           text("name").notNull(),
+  status:         text("status").notNull().default("draft"), // draft | active | archived
+  coverUrl:       text("cover_url"),
   description:    text("description").notNull().default(""),
   createdAt:      timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:      timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
