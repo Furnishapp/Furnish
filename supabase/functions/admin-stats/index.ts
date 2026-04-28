@@ -11,7 +11,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { password } = await req.json()
+    const { password, action = 'stats', userId } = await req.json()
     const adminPassword = Deno.env.get('ADMIN_PASSWORD')
 
     // Fail-closed: if the secret is not configured, deny all requests
@@ -29,6 +29,29 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
     )
 
+    // ── Delete user ───────────────────────────────────────────────────────────
+    if (action === 'deleteUser') {
+      if (!userId) {
+        return new Response(JSON.stringify({ error: 'userId is required' }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+
+      const { error } = await supabase.auth.admin.deleteUser(userId)
+      if (error) {
+        return new Response(JSON.stringify({ error: error.message }), {
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+
+      return new Response(JSON.stringify({ success: true }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
+    // ── Stats (default) ───────────────────────────────────────────────────────
     const [
       { data: users, error: userErr },
       { data: projects, error: projErr },
