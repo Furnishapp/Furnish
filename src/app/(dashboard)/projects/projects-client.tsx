@@ -9,10 +9,10 @@ interface Project { id: string; name: string; room_count: number; }
 
 export default function ProjectsClient({
   initialProjects,
-  userId,
+  orgId,
 }: {
   initialProjects: Project[];
-  userId: string;
+  orgId: string;
 }) {
   const router = useRouter();
   const [projects, setProjects] = useState<Project[]>(initialProjects);
@@ -33,7 +33,7 @@ export default function ProjectsClient({
     e.preventDefault();
     if (!name.trim()) return;
     setCreating(true);
-    await supabase.from("projects").insert({ name: name.trim(), user_id: userId });
+    await supabase.from("projects").insert({ name: name.trim(), organization_id: orgId });
     setName("");
     setCreating(false);
     refresh();

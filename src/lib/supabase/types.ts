@@ -14,6 +14,83 @@ export type Database = {
   }
   public: {
     Tables: {
+      organizations: {
+        Row: {
+          id:             string
+          owner_id:       string
+          name:           string
+          slug:           string
+          type:           string
+          logo_url:       string | null
+          primary_color:  string | null
+          metadata:       Json
+          created_at:     string
+          updated_at:     string
+          deleted_at:     string | null
+        }
+        Insert: {
+          id?:            string
+          owner_id:       string
+          name:           string
+          slug:           string
+          type?:          string
+          logo_url?:      string | null
+          primary_color?: string | null
+          metadata?:      Json
+          created_at?:    string
+          updated_at?:    string
+          deleted_at?:    string | null
+        }
+        Update: {
+          id?:            string
+          owner_id?:      string
+          name?:          string
+          slug?:          string
+          type?:          string
+          logo_url?:      string | null
+          primary_color?: string | null
+          metadata?:      Json
+          created_at?:    string
+          updated_at?:    string
+          deleted_at?:    string | null
+        }
+        Relationships: []
+      }
+      organization_members: {
+        Row: {
+          id:              string
+          organization_id: string
+          user_id:         string
+          role:            string
+          invited_by:      string | null
+          joined_at:       string
+        }
+        Insert: {
+          id?:             string
+          organization_id: string
+          user_id:         string
+          role?:           string
+          invited_by?:     string | null
+          joined_at?:      string
+        }
+        Update: {
+          id?:             string
+          organization_id?: string
+          user_id?:        string
+          role?:           string
+          invited_by?:     string | null
+          joined_at?:      string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "organization_members_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       links: {
         Row: {
           created_at: string
@@ -52,30 +129,41 @@ export type Database = {
       }
       projects: {
         Row: {
-          created_at: string
-          description: string
-          id: string
-          name: string
-          updated_at: string
-          user_id: string
+          created_at:      string
+          description:     string
+          id:              string
+          name:            string
+          organization_id: string
+          updated_at:      string
+          user_id:         string
         }
         Insert: {
-          created_at?: string
-          description?: string
-          id?: string
-          name: string
-          updated_at?: string
-          user_id: string
+          created_at?:      string
+          description?:     string
+          id?:              string
+          name:             string
+          organization_id:  string
+          updated_at?:      string
+          user_id?:         string
         }
         Update: {
-          created_at?: string
-          description?: string
-          id?: string
-          name?: string
-          updated_at?: string
-          user_id?: string
+          created_at?:      string
+          description?:     string
+          id?:              string
+          name?:            string
+          organization_id?: string
+          updated_at?:      string
+          user_id?:         string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "projects_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       room_links: {
         Row: {
