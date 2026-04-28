@@ -11,6 +11,7 @@ import {
   ChevronRight,
   Lock,
   RefreshCw,
+  Trash2,
 } from "lucide-react";
 
 // ADMIN_PASSWORD is NOT stored here — it lives in Supabase Vault as a secret
@@ -46,6 +47,11 @@ const Admin = () => {
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [expandedUser, setExpandedUser] = useState<string | null>(null);
+
+  // Delete state
+  const [deleteTarget, setDeleteTarget] = useState<UserStat | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   // The verified password is kept only in JS heap memory — never written to
   // the DOM, localStorage, or sessionStorage. Polling uses it for re-fetches.
@@ -139,6 +145,30 @@ const Admin = () => {
     setPassword("");
     setUsers([]);
     setProjects([]);
+  };
+
+  /* ── Delete user ────────────────────────────────────────────────────── */
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    setDeleteError(null);
+
+    const { data, error } = await supabase.functions.invoke("admin-stats", {
+      body: { password: passwordRef.current, action: "deleteUser", userId: deleteTarget.user_id },
+    });
+
+    if (error || data?.error) {
+      setDeleteError((error as { message?: string } | null)?.message ?? data?.error ?? "Failed to delete user");
+      setDeleting(false);
+      return;
+    }
+
+    // Remove user and their projects from local state optimistically
+    setUsers((prev) => prev.filter((u) => u.user_id !== deleteTarget.user_id));
+    setProjects((prev) => prev.filter((p) => p.user_id !== deleteTarget.user_id));
+    if (expandedUser === deleteTarget.user_id) setExpandedUser(null);
+    setDeleteTarget(null);
+    setDeleting(false);
   };
 
   /* ── Password gate ──────────────────────────────────────────────────── */
@@ -292,13 +322,14 @@ const Admin = () => {
                         Products
                       </th>
                       <th className="w-8 px-3 py-3" />
+                      <th className="w-8 px-3 py-3" />
                     </tr>
                   </thead>
                   <tbody>
                     {users.length === 0 ? (
                       <tr>
                         <td
-                          colSpan={5}
+                          colSpan={6}
                           className="px-5 py-12 text-center text-muted-foreground text-sm"
                         >
                           No accounts found
@@ -349,6 +380,21 @@ const Admin = () => {
                                     <ChevronRight className="w-3.5 h-3.5" />
                                   ))}
                               </td>
+                              <td
+                                className="px-3 py-3.5"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <button
+                                  onClick={() => {
+                                    setDeleteTarget(u);
+                                    setDeleteError(null);
+                                  }}
+                                  title="Delete user"
+                                  className="text-muted-foreground hover:text-destructive transition-colors"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </td>
                             </tr>
 
                             {/* ── Per-project sub-rows ─────────────── */}
@@ -378,6 +424,7 @@ const Admin = () => {
                                     {proj.product_count !== 1 ? "s" : ""}
                                   </td>
                                   <td className="px-3 py-2.5" />
+                                  <td className="px-3 py-2.5" />
                                 </tr>
                               ))}
                           </React.Fragment>
@@ -391,6 +438,50 @@ const Admin = () => {
           </>
         )}
       </main>
+
+      {/* ── Delete confirmation modal ──────────────────────────────────── */}
+      {deleteTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div
+            className="fixed inset-0 bg-black/40 backdrop-blur-sm"
+            onClick={() => !deleting && setDeleteTarget(null)}
+          />
+          <div className="relative z-10 bg-card border border-border rounded-xl shadow-xl w-full max-w-sm p-6 space-y-4">
+            <div>
+              <h3 className="text-sm font-semibold text-foreground">Delete account</h3>
+              <p className="text-xs text-muted-foreground mt-1">
+                This will permanently delete{" "}
+                <span className="font-medium text-foreground">{deleteTarget.user_email}</span>{" "}
+                and all their projects, rooms, and saved products. This cannot be undone.
+              </p>
+            </div>
+
+            {deleteError && (
+              <p className="text-xs text-destructive bg-destructive/10 rounded-lg px-3 py-2">
+                {deleteError}
+              </p>
+            )}
+
+            <div className="flex items-center justify-end gap-2 pt-1">
+              <button
+                onClick={() => setDeleteTarget(null)}
+                disabled={deleting}
+                className="px-3 py-1.5 text-xs rounded-lg border border-border text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmDelete}
+                disabled={deleting}
+                className="px-3 py-1.5 text-xs rounded-lg bg-destructive text-white hover:opacity-90 transition-opacity disabled:opacity-50 flex items-center gap-1.5"
+              >
+                {deleting && <Loader2 className="w-3 h-3 animate-spin" />}
+                Delete account
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
